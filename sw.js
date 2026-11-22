@@ -1,5 +1,5 @@
 /* Service worker: offline app shell + local reminders. No data ever leaves the device. */
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.1';
 const CACHE = `sluzhinnya-${VERSION}`;
 const ASSETS = [
   './',

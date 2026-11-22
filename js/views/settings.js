@@ -17,7 +17,7 @@ import { installable, install } from '../install.js';
 import { db } from '../db.js';
 import { WD_SHORT, fmtDate, toKey } from '../dates.js';
 import { applyTheme, APP_VERSION } from '../theme.js';
-import { isSignedIn, signOutAndWipe, syncNow, syncStatus, pendingCount } from '../sync.js';
+import { isSignedIn, signOutAndWipe, syncNow, syncStatus, pendingCount, cloudConfigured } from '../sync.js';
 
 const GOAL_NAME = { month: 'на місяць', year: 'на службовий рік', custom: 'на свій період' };
 
@@ -28,7 +28,7 @@ export async function render(root) {
   const perm = notifPermission();
   const est = await navigator.storage?.estimate?.().catch(() => null);
   const persisted = await navigator.storage?.persisted?.().catch(() => false);
-  const lastBackup = await db.getKV('lastBackup');
+  const lastBackup = state.settings.lastBackup || (await db.getKV('lastBackup'));
   const per = goalPeriod(s);
   const st = syncStatus();
 
@@ -111,7 +111,7 @@ export async function render(root) {
     <div class="group">
       <button type="button" class="group-row" data-pin>
         <span class="gr-ic">${icon('lock')}</span>
-        <span class="gr-main"><b>${pin ? 'PIN-код увімкнено' : 'Увімкнути PIN-код'}</b><span>${pin ? 'Змінити або вимкнути' : 'Запитувати PIN при відкритті'}</span></span>
+        <span class="gr-main"><b>${pin ? 'PIN-код' : 'Увімкнути PIN-код'}</b><span>${pin ? (cloudConfigured() ? 'Змінити або вимкнути' : 'Змінити PIN') : 'Запитувати PIN при відкритті'}</span></span>
         ${pin ? html`<span class="pill pill-good">Увімкнено</span>` : icon('right', 'gr-chev')}
       </button>
       ${pin ? html`
@@ -123,13 +123,16 @@ export async function render(root) {
     <div class="privacy card">
       <div class="privacy-head">${icon('shield')}<b>Як захищені ваші дані</b></div>
       <ul>
+        ${cloudConfigured() ? html`
         <li><b>Дані акаунта</b> зберігаються в базі Firebase (Google). Правила безпеки дозволяють читати й змінювати їх лише після входу саме у ваш акаунт; зʼєднання завжди зашифроване.</li>
         <li><b>Пароль</b> перевіряє Firebase, на телефоні він не зберігається. Від підбору пароля захищає вбудоване обмеження спроб.</li>
-        <li><b>Працює й без інтернету:</b> копія даних лежить на телефоні, а зміни надсилаються, щойно зʼявиться звʼязок.</li>
+        <li><b>Працює й без інтернету:</b> копія даних лежить на телефоні, а зміни надсилаються, щойно зʼявиться звʼязок.</li>` : html`
+        <li><b>Усе зберігається лише на цьому телефоні.</b> Немає сервера, бази даних чи акаунта — з інтернету нічого не можна «зламати» або «злити».</li>`}
         <li><b>Атаки DDoS не страшні.</b> Сторінка — це статичні файли на CDN GitHub Pages, а встановлений застосунок працює навіть без інтернету.</li>
-        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) дозволяє звертатися лише до сервісів входу та бази Firebase.</li>
+        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) не дає застосунку звертатися до сторонніх сайтів.</li>
         <li><b>Фото очищаються від метаданих</b> (зокрема GPS) під час збереження.</li>
         <li><b>PIN</b> зберігається лише як криптографічний хеш, а після 5 помилок вмикається пауза, що зростає.</li>
+        <li><b>Резервна копія</b> — це ваш захист від втрати телефона: зберігайте її в iCloud Drive або на Google Диск (застосунок нагадає раз на місяць).</li>
       </ul>
     </div>
 
@@ -339,10 +342,10 @@ function pinFlow(enabled, done) {
           mount(box, html`
             <div class="pin-choice">
               <button type="button" class="btn btn-block" data-change>${icon('edit')}Змінити PIN</button>
-              <button type="button" class="btn btn-block btn-ghost-danger" data-off>${icon('x')}Вимкнути PIN</button>
+              ${cloudConfigured() ? html`<button type="button" class="btn btn-block btn-ghost-danger" data-off>${icon('x')}Вимкнути PIN</button>` : ''}
             </div>`);
           $('[data-change]', box).addEventListener('click', () => createPin(box, close, done));
-          $('[data-off]', box).addEventListener('click', async () => { await removePin(); close(); toast('PIN вимкнено'); done(); });
+          $('[data-off]', box)?.addEventListener('click', async () => { await removePin(); close(); toast('PIN вимкнено'); done(); });
         },
       });
     },

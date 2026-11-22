@@ -9,6 +9,7 @@ import { openGoalSheet } from '../goal-sheet.js';
 import { installable, install } from '../install.js';
 import { toast } from '../ui.js';
 import { isSignedIn, syncStatus } from '../sync.js';
+import { exportBackup } from '../backup.js';
 import { syncIcon } from './settings.js';
 
 let weekOffset = 0;
@@ -37,6 +38,10 @@ export function render(root) {
   const monthMin = sumRange(state.entries, toKey(startOfMonth(now)), toKey(endOfMonth(now)));
   const todayMin = byDay.get(tk) || 0; // used by the reminder banner
   const remindToday = reminderDue(now, todayMin);
+  const DAY = 86400000;
+  const firstData = Math.min(...state.entries.map((e) => e.createdAt || Date.now()), Date.now());
+  const backupDue = !isSignedIn() && state.entries.length > 0 && Date.now() - firstData > 3 * DAY
+    && Date.now() - (s.lastBackup || 0) > 30 * DAY && Date.now() - (s.backupSnoozedAt || 0) > 7 * DAY;
   const recent = [...state.entries].sort((a, b) => (b.date === a.date ? b.createdAt - a.createdAt : b.date < a.date ? -1 : 1)).slice(0, 5);
 
   mount(root, html`
@@ -57,6 +62,14 @@ export function render(root) {
         <div class="banner-text"><b>Встановіть на телефон</b><span>Іконка на робочому столі, робота без інтернету.</span></div>
         <button type="button" class="btn btn-sm btn-primary" data-install>Як?</button>
         <button type="button" class="icon-btn icon-btn-sm" data-dismiss-install aria-label="Сховати">${icon('x')}</button>
+      </div>` : ''}
+
+    ${backupDue ? html`
+      <div class="banner">
+        ${icon('download', 'banner-i')}
+        <div class="banner-text"><b>Збережіть резервну копію</b><span>${s.lastBackup ? 'Минув місяць.' : 'Ще жодної не було.'} У iCloud чи на Google Диск — на випадок втрати телефона.</span></div>
+        <button type="button" class="btn btn-sm btn-primary" data-backup>Зберегти</button>
+        <button type="button" class="icon-btn icon-btn-sm" data-snooze-backup aria-label="Нагадати пізніше">${icon('x')}</button>
       </div>` : ''}
 
     ${remindToday ? html`
@@ -195,6 +208,11 @@ export function render(root) {
     if (t.closest('[data-goal]')) { openGoalSheet(); return; }
     if (t.closest('[data-install]')) { install(); return; }
     if (t.closest('[data-dismiss-install]')) { saveSettings({ installDismissed: true }); return; }
+    if (t.closest('[data-snooze-backup]')) { saveSettings({ backupSnoozedAt: Date.now() }); toast('Нагадаю через тиждень'); return; }
+    if (t.closest('[data-backup]')) {
+      try { const r = await exportBackup(); if (r !== 'aborted') toast('Резервну копію збережено'); } catch (err) { toast(`Помилка: ${err.message}`, { kind: 'warn' }); }
+      return;
+    }
     if (t.closest('[data-add-today]')) { openEntrySheet(); return; }
     const ed = t.closest('[data-edit]');
     if (ed) { const en = state.entries.find((x) => x.id === ed.dataset.edit); if (en) openEntrySheet({ entry: en }); return; }

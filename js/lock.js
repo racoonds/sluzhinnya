@@ -116,6 +116,37 @@ export function pinPad(container, { title, subtitle = '', onComplete }) {
 let locked = false;
 export const isLocked = () => locked;
 
+/** First launch: the PIN is created here (the app's "registration"). */
+export function showPinSetup() {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.id = 'pinsetup';
+    el.className = 'lock';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', 'Створення PIN-коду');
+    document.body.append(el);
+    document.body.classList.add('is-locked');
+    const intro = 'Застосунок проситиме його щоразу при відкритті. Запамʼятайте: відновити PIN неможливо.';
+    let first = null;
+    pinPad(el, {
+      title: 'Придумайте PIN-код',
+      subtitle: intro,
+      async onComplete(p, api) {
+        if (!first) { first = p; api.reset(); api.setTitle('Повторіть PIN-код'); api.setSub('Ще раз ті самі 4 цифри'); return; }
+        if (p !== first) { first = null; api.shake(); api.reset(); api.setTitle('Придумайте PIN-код'); api.setSub('PIN не збігся — спробуйте ще раз', true); return; }
+        api.setBusy(true);
+        await setPin(p);
+        haptic(15);
+        el.classList.add('unlocking');
+        document.body.classList.remove('is-locked');
+        setTimeout(() => el.remove(), 260);
+        resolve();
+      },
+    });
+  });
+}
+
 export function showLock({ onWipe } = {}) {
   if (locked || $('#lock')) return Promise.resolve();
   locked = true;
@@ -176,7 +207,7 @@ export function showLock({ onWipe } = {}) {
       mount(pad.extra, html`<button type="button" class="link link-muted" data-forgot>Забули PIN?</button>`);
       pad.extra.addEventListener('click', async (e) => {
         if (!e.target.closest('[data-forgot]')) return;
-        const msg = 'PIN не зберігається у відкритому вигляді, тож відновити його неможливо. Можна лише видалити ВСІ дані на цьому пристрої та почати спочатку. Видалити все?';
+        const msg = 'PIN не зберігається у відкритому вигляді, тож відновити його неможливо. Можна лише видалити ВСІ дані на цьому пристрої та почати спочатку (потім їх можна повернути з резервної копії). Видалити все?';
         if (window.confirm(msg) && window.confirm('Точно? Години, території, фото і нотатки буде стерто назавжди.')) {
           await onWipe();
         }

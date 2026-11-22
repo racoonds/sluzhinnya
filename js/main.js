@@ -8,13 +8,13 @@ import * as terr from './views/territories.js';
 import * as notes from './views/notes.js';
 import * as settings from './views/settings.js';
 import { closeAllOverlays, toast } from './ui.js';
-import { hasPin, showLock, isLocked } from './lock.js';
+import { hasPin, showLock, isLocked, showPinSetup } from './lock.js';
 import { openEntrySheet } from './entry-sheet.js';
 import { openGoalSheet } from './goal-sheet.js';
 import { scheduleInApp, registerPeriodic, notifPermission } from './reminders.js';
 import { wipeAll } from './backup.js';
 import { applyTheme } from './theme.js';
-import { initSync, needsAuth, syncSoon, syncNow, pendingCount, isSignedIn, syncStatus, sessionEmail } from './sync.js';
+import { initSync, needsAuth, syncSoon, syncNow, pendingCount, isSignedIn, syncStatus, sessionEmail, cloudConfigured } from './sync.js';
 import { showAuthGate, gateOpen } from './auth-gate.js';
 
 // Refuse to run inside someone else's frame (clickjacking).
@@ -109,10 +109,11 @@ document.addEventListener('visibilitychange', async () => {
 
 /* ---------- service worker ---------- */
 
+let updateRequested = false;
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('sw.js', { scope: './' }).then((reg) => {
-    const offer = (w) => toast('Доступна нова версія', { action: 'Оновити', ms: 15000, onAction: () => w.postMessage('skipWaiting') });
+    const offer = (w) => toast('Доступна нова версія', { action: 'Оновити', ms: 15000, onAction: () => { updateRequested = true; w.postMessage('skipWaiting'); } });
     if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;
@@ -120,8 +121,9 @@ function registerSW() {
     });
     setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
   }).catch((e) => console.warn('SW', e));
+  // Reload only when the user tapped "Оновити" — not when the very first service worker takes control.
   let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (updateRequested && !reloaded) { reloaded = true; location.reload(); } });
 }
 
 /* ---------- boot ---------- */
@@ -146,6 +148,7 @@ async function boot() {
   });
   pinOn = await hasPin();
   if (pinOn) lock();
+  else if (!cloudConfigured()) { await showPinSetup(); pinOn = true; } // single-user mode: the PIN is the login
 
   let queued = false;
   subscribe(() => {

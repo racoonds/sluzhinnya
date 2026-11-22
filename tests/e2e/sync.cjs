@@ -192,8 +192,13 @@ const check = (label, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); 
 
   /* D: someone who used the app before accounts existed → data moves into the new account */
   const D = await device(browser, 'D', { configured: false });
-  await D.goto(APP); await D.waitForSelector('.sheet'); await D.keyboard.press('Escape'); await D.waitForTimeout(300);
-  check('no gate while accounts are not configured', !(await D.$('#auth')));
+  await D.goto(APP);
+  await D.waitForSelector('#pinsetup .pin-key');
+  check('no account gate while accounts are not configured (PIN setup instead)', !(await D.$('#auth')));
+  for (const k of '1234') await D.click(`#pinsetup .pin-key[data-n="${k}"]`);
+  await D.waitForTimeout(300);
+  for (const k of '1234') await D.click(`#pinsetup .pin-key[data-n="${k}"]`);
+  await D.waitForSelector('.sheet'); await D.keyboard.press('Escape'); await D.waitForTimeout(300);
   await D.click('[data-add-hours]'); await D.click('.chip[data-set="90"]'); await D.click('.sheet form button[type=submit]'); await D.waitForTimeout(400);
   D.ctx.cfg = true;
   await D.reload(); await D.waitForSelector('#auth');

@@ -1,6 +1,6 @@
 // Backup to a file you keep yourself (no cloud). Import restores everything.
 import { db } from './db.js';
-import { state, load, emit } from './store.js';
+import { state, load, emit, saveSettings } from './store.js';
 import { deliverFile } from './reminders.js';
 import { todayKey, isKey } from './dates.js';
 import { uid } from './util.js';
@@ -36,7 +36,7 @@ export async function exportBackup() {
   };
   const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
   const res = await deliverFile(blob, `sluzhinnya-${todayKey()}.json`, 'Резервна копія');
-  if (res !== 'aborted') await db.setKV('lastBackup', Date.now());
+  if (res !== 'aborted') { await db.setKV('lastBackup', Date.now()); await saveSettings({ lastBackup: Date.now() }); }
   return res;
 }
 

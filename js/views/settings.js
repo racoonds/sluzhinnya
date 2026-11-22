@@ -1,4 +1,4 @@
-// Settings: goal, reminders, PIN, backup, theme, privacy info.
+// Settings: Google account sync, goal, reminders, PIN, backup, theme, privacy info.
 import { $, $$, html, mount, haptic, bytes, fmtHM, isStandalone, plural } from '../util.js';
 
 const n = (x, forms) => `${x} ${plural(x, forms)}`;
@@ -17,6 +17,7 @@ import { installable, install } from '../install.js';
 import { db } from '../db.js';
 import { WD_SHORT, fmtDate, toKey } from '../dates.js';
 import { applyTheme, APP_VERSION } from '../theme.js';
+import { cloudConfigured, isSignedIn, signIn, signOut, syncNow, syncStatus } from '../sync.js';
 
 const GOAL_NAME = { month: 'на місяць', year: 'на службовий рік', custom: 'на свій період' };
 
@@ -29,12 +30,51 @@ export async function render(root) {
   const persisted = await navigator.storage?.persisted?.().catch(() => false);
   const lastBackup = await db.getKV('lastBackup');
   const per = goalPeriod(s);
+  const st = syncStatus();
 
   mount(root, html`
     <header class="top top-back">
       <a class="icon-btn" href="#/home" aria-label="Назад">${icon('left')}</a>
       <div class="top-title"><div class="eyebrow">Служіння</div><h1>Налаштування</h1></div>
     </header>
+
+    <h3 class="group-title">Акаунт</h3>
+    ${!cloudConfigured() ? html`
+    <div class="group">
+      <div class="group-row is-dim">
+        <span class="gr-ic">${icon('cloud')}</span>
+        <span class="gr-main"><b>Вхід через Google</b><span>Ще не налаштовано (потрібне одноразове налаштування Firebase)</span></span>
+      </div>
+    </div>` : !st.signedIn ? html`
+    <div class="group">
+      <button type="button" class="group-row" data-signin>
+        <span class="gr-ic gr-ic-accent">${icon('cloud')}</span>
+        <span class="gr-main"><b>Увійти через Google</b><span>Дані збережуться у вашому акаунті й зʼявляться на інших пристроях</span></span>
+        ${icon('right', 'gr-chev')}
+      </button>
+    </div>
+    <p class="group-hint">Без входу все працює як раніше — дані лише на цьому телефоні.</p>` : html`
+    <div class="group">
+      <div class="group-row">
+        <span class="avatar">${(st.name || st.email || '?').trim().charAt(0).toUpperCase()}</span>
+        <span class="gr-main"><b>${st.name || 'Google-акаунт'}</b><span>${st.email}</span></span>
+      </div>
+      ${st.state === 'relogin' ? html`
+      <button type="button" class="group-row" data-signin>
+        <span class="gr-ic gr-ic-warn">${icon('cloudOff')}</span>
+        <span class="gr-main"><b>Увійти ще раз</b><span>Сеанс завершився — зміни зберігаються на телефоні й надішлються після входу</span></span>
+        ${icon('right', 'gr-chev')}
+      </button>` : html`
+      <button type="button" class="group-row" data-sync-now>
+        <span class="gr-ic" data-sync-ic>${icon(syncIcon(st.state))}</span>
+        <span class="gr-main"><b>Синхронізація</b><span data-sync-line>${syncLine(st)}</span></span>
+        <span class="gr-act ${st.state === 'syncing' ? 'is-spin' : ''}" data-sync-spin>${icon('refresh')}</span>
+      </button>`}
+      <button type="button" class="group-row" data-signout>
+        <span class="gr-ic">${icon('logout')}</span>
+        <span class="gr-main"><b>Вийти з акаунта</b><span>Дані на цьому телефоні залишаться</span></span>
+      </button>
+    </div>`}
 
     <h3 class="group-title">Ціль</h3>
     <div class="group">
@@ -103,9 +143,10 @@ export async function render(root) {
     <div class="privacy card">
       <div class="privacy-head">${icon('shield')}<b>Як захищені ваші дані</b></div>
       <ul>
-        <li><b>Усе зберігається лише на цьому телефоні.</b> Немає сервера, бази даних чи акаунта — нічого не можна «зламати» або «злити» з інтернету.</li>
+        <li><b>Без входу все зберігається лише на цьому телефоні.</b> Немає нашого сервера чи спільної бази — нічого «злити».</li>
+        <li><b>З входом через Google</b> копія зберігається у вашому власному проєкті Firebase. Правила безпеки дозволяють читати й змінювати її лише вашому Google-акаунту, а зʼєднання завжди зашифроване.</li>
         <li><b>Атаки DDoS не страшні.</b> Сторінка — це статичні файли на CDN GitHub Pages, а встановлений застосунок працює навіть без інтернету.</li>
-        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) забороняє застосунку звертатися до будь-яких інших сайтів.</li>
+        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) дозволяє звертатися лише до сервісів входу та бази Google.</li>
         <li><b>Фото очищаються від метаданих</b> (зокрема GPS) під час збереження.</li>
         <li><b>PIN</b> зберігається лише як криптографічний хеш, а після 5 помилок вмикається пауза, що зростає.</li>
       </ul>
@@ -189,8 +230,31 @@ export async function render(root) {
     } catch (err) { toast(err.message, { kind: 'warn', ms: 5000 }); }
   });
 
+  const onSync = (ev) => {
+    const d = ev.detail;
+    if (d.signedIn !== st.signedIn || (d.state === 'relogin') !== (st.state === 'relogin')) { rerender(); return; }
+    const line = $('[data-sync-line]', root);
+    if (line) line.textContent = syncLine(d);
+    const ic = $('[data-sync-ic]', root);
+    if (ic) mount(ic, icon(syncIcon(d.state)));
+    $('[data-sync-spin]', root)?.classList.toggle('is-spin', d.state === 'syncing');
+  };
+  window.addEventListener('sync-status', onSync);
+  const tick = setInterval(() => { const line = $('[data-sync-line]', root); if (line) line.textContent = syncLine(syncStatus()); }, 30000);
+
   root.onclick = async (e) => {
     const t = e.target;
+    if (t.closest('[data-signin]')) {
+      try { await signIn(); } catch (err) { toast(err.message, { kind: 'warn' }); }
+      return;
+    }
+    if (t.closest('[data-sync-now]')) { haptic(); syncNow(); return; }
+    if (t.closest('[data-signout]')) {
+      if (!(await confirmDialog('Синхронізацію буде вимкнено. Дані на цьому телефоні та копія в Google-акаунті залишаться.', { title: 'Вийти з акаунта?', ok: 'Вийти', danger: false }))) return;
+      await signOut();
+      toast('Ви вийшли з акаунта');
+      return rerender();
+    }
     if (t.closest('[data-goal]')) return openGoalSheet();
     const dc = t.closest('[data-dayc]');
     if (dc) {
@@ -231,14 +295,37 @@ export async function render(root) {
     }
     if (t.closest('[data-install]')) return install();
     if (t.closest('[data-wipe]')) {
-      if (!(await confirmDialog('Буде видалено всі години, території, фото та нотатки на цьому пристрої. Радимо спершу зберегти резервну копію.', { title: 'Видалити всі дані?', ok: 'Видалити все' }))) return;
+      if (!(await confirmDialog(`Буде видалено всі години, території, фото та нотатки на цьому пристрої${isSignedIn() ? ' і виконано вихід з акаунта (копія в Google-акаунті залишиться)' : ''}. Радимо спершу зберегти резервну копію.`, { title: 'Видалити всі дані?', ok: 'Видалити все' }))) return;
       if (!(await confirmDialog('Це остаточно. Продовжити?', { title: 'Точно?', ok: 'Так, видалити' }))) return;
       await wipeAll();
       toast('Усі дані видалено');
       location.hash = '#/home';
     }
   };
-  return () => { root.onclick = null; };
+  return () => { root.onclick = null; window.removeEventListener('sync-status', onSync); clearInterval(tick); };
+}
+
+export function syncIcon(state) {
+  return state === 'offline' || state === 'error' || state === 'relogin' ? 'cloudOff' : state === 'syncing' ? 'cloud' : 'cloudCheck';
+}
+
+function ago(t) {
+  const sec = Math.round((Date.now() - t) / 1000);
+  if (sec < 45) return 'щойно';
+  const m = Math.round(sec / 60);
+  if (m < 60) return `${m} хв тому`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} год тому`;
+  return fmtDate(toKey(new Date(t)));
+}
+
+export function syncLine(st) {
+  if (st.state === 'syncing') return 'Синхронізація…';
+  if (st.state === 'offline') return 'Немає інтернету — синхронізую, щойно зʼявиться';
+  if (st.state === 'relogin') return 'Сеанс завершився — увійдіть ще раз';
+  if (st.state === 'error') return `Не вдалося: ${st.error}. Спробую пізніше`;
+  const p = st.pending ? ` · змін у черзі: ${st.pending}` : '';
+  return st.at ? `Синхронізовано ${ago(st.at)}${p}` : `Ще не синхронізовано${p}`;
 }
 
 function notifLabel(perm) {

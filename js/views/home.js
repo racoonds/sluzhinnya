@@ -8,6 +8,8 @@ import { openEntrySheet } from '../entry-sheet.js';
 import { openGoalSheet } from '../goal-sheet.js';
 import { installable, install } from '../install.js';
 import { toast } from '../ui.js';
+import { isSignedIn, syncStatus } from '../sync.js';
+import { syncIcon } from './settings.js';
 
 let weekOffset = 0;
 let lastPct = 0;
@@ -43,7 +45,10 @@ export function render(root) {
         <div class="eyebrow">${capital(fmtDate(tk, { weekday: true }))}</div>
         <h1>Служіння</h1>
       </div>
-      <a class="icon-btn" href="#/settings" aria-label="Налаштування">${icon('settings')}</a>
+      <div class="top-actions">
+        ${isSignedIn() ? html`<a class="icon-btn sync-ind" href="#/settings" data-sync-ind data-state="${syncStatus().state}" aria-label="Синхронізація з Google">${icon(syncIcon(syncStatus().state))}</a>` : ''}
+        <a class="icon-btn" href="#/settings" aria-label="Налаштування">${icon('settings')}</a>
+      </div>
     </header>
 
     ${installable() && !s.installDismissed ? html`
@@ -203,7 +208,14 @@ export function render(root) {
     if (el) el.textContent = clock(timerMs());
   };
   const iv = state.timer?.running ? setInterval(tick, 1000) : null;
-  return () => { if (iv) clearInterval(iv); root.onclick = null; };
+  const onSync = (ev) => {
+    const el = $('[data-sync-ind]', root);
+    if (!el) return;
+    el.dataset.state = ev.detail.state;
+    mount(el, icon(syncIcon(ev.detail.state)));
+  };
+  window.addEventListener('sync-status', onSync);
+  return () => { if (iv) clearInterval(iv); root.onclick = null; window.removeEventListener('sync-status', onSync); };
 }
 
 function timerCard() {

@@ -71,7 +71,8 @@ export function renderEditor(root, [id]) {
     if (!ta.value.trim() && !state.notes.some((n) => n.id === note.id)) return;
     note.text = ta.value;
     await saveNote(note, { silent: true });
-    if (location.hash !== `#/note/${note.id}`) history.replaceState(null, '', `#/note/${note.id}`);
+    // A brand-new note gets its real address — but only while we are still on that editor.
+    if (location.hash === '#/note/new') history.replaceState(null, '', `#/note/${note.id}`);
     mark.textContent = 'Збережено';
   };
   const d = debounce(persist, 450);

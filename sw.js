@@ -1,5 +1,5 @@
 /* Service worker: offline app shell + local reminders. No data ever leaves the device. */
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = `sluzhinnya-${VERSION}`;
 const ASSETS = [
   './',
@@ -30,6 +30,8 @@ const ASSETS = [
   'js/photos.js',
   'js/reminders.js',
   'js/backup.js',
+  'js/config.js',
+  'js/sync.js',
   'js/views/home.js',
   'js/views/calendar.js',
   'js/views/territories.js',

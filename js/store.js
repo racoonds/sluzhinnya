@@ -26,6 +26,12 @@ const listeners = new Set();
 export const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 export const emit = () => { for (const fn of listeners) fn(); };
 
+/* Cloud sync hooks in here (see sync.js): every local change is reported with its timestamp. */
+let changeHook = null;
+export const setChangeHook = (fn) => { changeHook = fn; };
+const changed = (store, id, ts) => { try { changeHook?.(store, id, ts); } catch (e) { console.error(e); } };
+const GOAL_KEYS = ['goalType', 'goals', 'customStart', 'customEnd'];
+
 function mergeSettings(saved) {
   const s = { ...structuredClone(DEFAULTS), ...(saved || {}) };
   s.goals = { ...DEFAULTS.goals, ...(saved?.goals || {}) };
@@ -45,25 +51,32 @@ export async function load() {
 }
 
 export async function saveSettings(patch) {
+  const goalChanged = GOAL_KEYS.some((k) => k in patch);
+  if (goalChanged) patch = { ...patch, goalUpdatedAt: Date.now() };
   state.settings = mergeSettings({ ...state.settings, ...patch });
   await db.setKV('settings', state.settings);
+  if (goalChanged) changed('settings', 'goal', state.settings.goalUpdatedAt);
   emit();
 }
 
 /* ---------- hours ---------- */
 
 export async function addEntry({ date = todayKey(), minutes, note = '' }) {
-  const e = { id: uid(), date, minutes: Math.round(minutes), note: note.trim(), createdAt: Date.now() };
+  const now = Date.now();
+  const e = { id: uid(), date, minutes: Math.round(minutes), note: note.trim(), createdAt: now, updatedAt: now };
   state.entries.push(e);
   await db.put('entries', e);
+  changed('entries', e.id, now);
   emit();
   return e;
 }
 
 export async function updateEntry(e) {
+  e = { ...e, updatedAt: Date.now() };
   const i = state.entries.findIndex((x) => x.id === e.id);
   if (i >= 0) state.entries[i] = e; else state.entries.push(e);
   await db.put('entries', e);
+  changed('entries', e.id, e.updatedAt);
   emit();
 }
 
@@ -71,6 +84,7 @@ export async function deleteEntry(id) {
   const e = state.entries.find((x) => x.id === id);
   state.entries = state.entries.filter((x) => x.id !== id);
   await db.del('entries', id);
+  changed('entries', id, Date.now());
   emit();
   return e;
 }
@@ -104,6 +118,7 @@ export async function saveNote(n, { silent = false } = {}) {
   const i = state.notes.findIndex((x) => x.id === n.id);
   if (i >= 0) state.notes[i] = n; else state.notes.push(n);
   await db.put('notes', n);
+  changed('notes', n.id, n.updatedAt);
   if (!silent) emit();
   return n;
 }
@@ -112,6 +127,7 @@ export async function deleteNote(id) {
   const n = state.notes.find((x) => x.id === id);
   state.notes = state.notes.filter((x) => x.id !== id);
   await db.del('notes', id);
+  changed('notes', id, Date.now());
   emit();
   return n;
 }
@@ -130,6 +146,7 @@ export async function saveTerritory(t, { silent = false } = {}) {
   const i = state.territories.findIndex((x) => x.id === t.id);
   if (i >= 0) state.territories[i] = t; else state.territories.push(t);
   await db.put('territories', t);
+  changed('territories', t.id, t.updatedAt);
   if (!silent) emit();
   return t;
 }
@@ -138,6 +155,7 @@ export async function deleteTerritory(id) {
   const t = state.territories.find((x) => x.id === id);
   state.territories = state.territories.filter((x) => x.id !== id);
   await db.del('territories', id);
+  changed('territories', id, Date.now());
   if (t?.photoId) await deletePhoto(t.photoId);
   emit();
 }
@@ -154,15 +172,21 @@ const urlCache = new Map();
 export async function savePhoto({ blob, thumb, width, height }) {
   const p = { id: uid(), blob, thumb, width, height, createdAt: Date.now() };
   await db.put('photos', p);
+  changed('photos', p.id, p.createdAt);
   return p.id;
 }
 
-export async function deletePhoto(id) {
+export function forgetPhotoURL(id) {
   for (const kind of ['thumb', 'full']) {
     const k = `${id}:${kind}`;
     if (urlCache.has(k)) { URL.revokeObjectURL(urlCache.get(k)); urlCache.delete(k); }
   }
+}
+
+export async function deletePhoto(id) {
+  forgetPhotoURL(id);
   await db.del('photos', id);
+  changed('photos', id, Date.now());
 }
 
 export async function photoURL(id, kind = 'thumb') {

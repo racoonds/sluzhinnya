@@ -14,6 +14,7 @@ import { openGoalSheet } from './goal-sheet.js';
 import { scheduleInApp, registerPeriodic, notifPermission } from './reminders.js';
 import { wipeAll } from './backup.js';
 import { applyTheme } from './theme.js';
+import { initSync, handleAuthRedirect, syncSoon, syncNow, pendingCount, isSignedIn, syncStatus } from './sync.js';
 
 // Refuse to run inside someone else's frame (clickjacking).
 if (window.top !== window.self) {
@@ -94,12 +95,14 @@ const lock = () => { closeAllOverlays(); return showLock({ onWipe: async () => {
 document.addEventListener('visibilitychange', async () => {
   if (document.hidden) {
     hiddenAt = Date.now();
+    if (isSignedIn() && pendingCount()) syncNow(); // try to upload before the app is suspended
     pinOn = await hasPin();
     if (pinOn && state.settings.autoLock === 0 && !isLocked()) lock();
     return;
   }
   if (pinOn && !isLocked() && Date.now() - hiddenAt >= state.settings.autoLock * 60000) lock();
   scheduleInApp();
+  if (isSignedIn() && Date.now() - (syncStatus().at || 0) > 20000) syncSoon(400);
   if (['home', 'calendar'].includes(parseHash().name)) render({ keepScroll: true }); // the date may have changed
 });
 
@@ -130,6 +133,8 @@ async function boot() {
     return;
   }
   applyTheme();
+  const auth = await handleAuthRedirect(); // finishes "Sign in with Google" (must run before routing)
+  await initSync();
   renderTabs();
   pinOn = await hasPin();
   if (pinOn) lock();
@@ -145,6 +150,8 @@ async function boot() {
 
   await render();
   document.body.classList.add('ready');
+  if (auth?.ok) toast(`Ви увійшли як ${auth.email}. Синхронізую дані…`, { ms: 4500 });
+  else if (auth?.error) toast(auth.error, { kind: 'warn', ms: 5000 });
 
   if (pinOn) await new Promise((res) => { const iv = setInterval(() => { if (!isLocked()) { clearInterval(iv); res(); } }, 150); });
 

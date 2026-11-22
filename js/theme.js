@@ -1,7 +1,7 @@
 // Theme + version (kept separate to avoid circular imports).
 import { state } from './store.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 const BG = { dark: '#08090a', light: '#f7f7f8' };
 

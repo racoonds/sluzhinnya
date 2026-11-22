@@ -1,14 +1,13 @@
-// Calendar: month grid with hours per day, day details, service-year overview.
-import { $, html, mount, fmtHM, fmtShort, haptic, plural } from '../util.js';
+// Calendar: month heat-map, the selected day's entries, service-year overview.
+import { $, html, mount, fmtShort, fmtClock, haptic } from '../util.js';
 import { icon } from '../icons.js';
 import { state, minutesByDay, entriesOn } from '../store.js';
 import { serviceYearMonths, sumRange } from '../stats.js';
 import {
-  toKey, todayKey, fromKey, isKey, startOfMonth, endOfMonth, weekday, monthTitle,
-  fmtDate, WD_SHORT, MONTHS, serviceYearOf,
+  toKey, todayKey, fromKey, isKey, startOfMonth, endOfMonth, weekday,
+  WD_SHORT, MONTHS, MONTHS_SHORT, serviceYearOf,
 } from '../dates.js';
-import { openEntrySheet } from '../entry-sheet.js';
-import { capital } from './home.js';
+import { openEntrySheet, dayTitle } from '../entry-sheet.js';
 
 let month = startOfMonth(new Date());
 let selected = todayKey();
@@ -38,9 +37,9 @@ export function render(root, params = []) {
     const lvl = m === 0 ? 0 : m < 60 ? 1 : m < 120 ? 2 : m < 180 ? 3 : 4;
     const cls = [k === tk && 'is-today', k === selected && 'is-sel', k > tk && 'is-future'].filter(Boolean).join(' ');
     cells.push(html`
-      <button type="button" class="cal-cell ${cls}" data-k="${k}" data-level="${lvl}" aria-label="${d}: ${m ? fmtHM(m) : 'немає записів'}">
+      <button type="button" class="cal-cell ${cls}" data-k="${k}" data-level="${lvl}" aria-label="${d}: ${fmtClock(m)}">
         <span class="cal-d">${d}</span>
-        <span class="cal-h">${m ? fmtShort(m) : ''}</span>
+        <span class="cal-h">${m ? fmtClock(m) : ''}</span>
       </button>`);
   }
 
@@ -51,18 +50,22 @@ export function render(root, params = []) {
   const syTotal = months.reduce((a, m) => a + m.min, 0);
   const maxM = Math.max(60, ...months.map((m) => m.min), s.goalType === 'year' ? (s.goals.year || 0) * 5 : 0);
 
-  mount(root, html`
-    <header class="top"><div><div class="eyebrow">Облік</div><h1>Календар</h1></div>
-      <button type="button" class="btn btn-sm" data-today>Сьогодні</button></header>
+    mount(root, html`
+    <header class="top">
+      <span class="label">календар</span>
+      ${!isCurMonth || selected !== tk ? html`<button type="button" class="pill-btn" data-today>Сьогодні</button>` : ''}
+    </header>
 
     <section class="card cal">
-      <div class="cal-head">
-        <button type="button" class="icon-btn icon-btn-sm" data-m="-1" aria-label="Попередній місяць">${icon('left')}</button>
-        <div class="cal-title">
-          <b>${monthTitle(month)}</b>
-          <span>${fmtHM(monthMin)}${monthGoal && isCurMonth ? html` з ${fmtHM(monthGoal)}` : ''} · ${activeDays} ${plural(activeDays, ['день', 'дні', 'днів'])}</span>
-        </div>
-        <button type="button" class="icon-btn icon-btn-sm" data-m="1" aria-label="Наступний місяць">${icon('right')}</button>
+      <div class="card-top">
+        <button type="button" class="nav-btn" data-m="-1" aria-label="Попередній місяць">${icon('left')}</button>
+        <div class="cal-title">${MONTHS[month.getMonth()]}${month.getFullYear() !== new Date().getFullYear() ? html` <span>${month.getFullYear()}</span>` : ''}</div>
+        <button type="button" class="nav-btn" data-m="1" aria-label="Наступний місяць">${icon('right')}</button>
+      </div>
+      <div class="kv-row">
+        <div class="kv"><span class="label">години</span><b>${fmtClock(monthMin)}</b></div>
+        ${monthGoal ? html`<div class="kv"><span class="label">ціль</span><b>${fmtShort(monthGoal)}</b></div>` : ''}
+        <div class="kv"><span class="label">днів</span><b>${activeDays}</b></div>
       </div>
       ${monthGoal ? html`<div class="meter"><span class="meter-fill" data-vars="--p:${Math.min(100, (monthMin / monthGoal) * 100).toFixed(1)}%"></span></div>` : ''}
       <div class="cal-grid" data-swipe>
@@ -73,24 +76,24 @@ export function render(root, params = []) {
 
     <section class="section">
       <div class="section-head">
-        <h2>${selected === tk ? 'Сьогодні' : capital(fmtDate(selected, { weekday: true }))}</h2>
-        <span class="section-val">${dayTotal ? fmtHM(dayTotal) : ''}</span>
+        <span class="label">${dayTitle(selected)}</span>
+        <span class="num">${dayTotal ? fmtClock(dayTotal) : ''}</span>
       </div>
       ${dayEntries.length ? html`
-        <div class="list">${dayEntries.map((e) => html`
-          <button type="button" class="row" data-edit="${e.id}">
-            <span class="row-ic">${icon('clock')}</span>
-            <span class="row-main"><span class="row-title">${fmtHM(e.minutes)}</span>${e.note ? html`<span class="row-sub">${e.note}</span>` : ''}</span>
-            <span class="row-chev">${icon('edit')}</span>
+        <div class="day-list">${dayEntries.map((e) => html`
+          <button type="button" class="day-item" data-edit="${e.id}">
+            <span class="num">${fmtClock(e.minutes)}</span>
+            <span class="day-note">${e.note}</span>
+            ${icon('edit', 'day-edit')}
           </button>`)}
-        </div>` : html`<div class="empty-inline">${selected > tk ? 'Цей день ще не настав.' : 'За цей день записів немає.'}</div>`}
-      ${selected <= tk ? html`<button type="button" class="btn btn-block btn-soft" data-add>${icon('plus')}Додати години за цей день</button>` : ''}
+        </div>` : ''}
+      ${selected <= tk ? html`<button type="button" class="btn btn-block btn-soft" data-add>${icon('plus')}Додати</button>` : ''}
     </section>
 
     <section class="section">
       <div class="section-head">
-        <h2>Службовий рік ${sy}/${String(sy + 1).slice(2)}</h2>
-        <span class="section-val">${fmtHM(syTotal)}${s.goalType === 'year' && s.goals.year ? html` <em>з ${s.goals.year} год</em>` : ''}</span>
+        <span class="label">службовий рік ${sy}/${String(sy + 1).slice(2)}</span>
+        <span class="num">${fmtClock(syTotal)}${s.goalType === 'year' && s.goals.year ? html`<em> / ${s.goals.year}</em>` : ''}</span>
       </div>
       <div class="card year">
         ${months.map((m) => {
@@ -98,9 +101,9 @@ export function render(root, params = []) {
           const cur = k === toKey(startOfMonth(new Date()));
           return html`
           <button type="button" class="year-row ${cur ? 'is-cur' : ''}" data-month="${k}">
-            <span class="year-m">${MONTHS[m.m.getMonth()]}</span>
+            <span class="year-m">${MONTHS_SHORT[m.m.getMonth()]}</span>
             <span class="year-bar"><span class="year-fill" data-vars="--w:${m.min ? Math.max(2, (m.min / maxM) * 100).toFixed(1) : 0}%"></span></span>
-            <span class="year-v">${m.min ? fmtShort(m.min) : '—'}</span>
+            <span class="year-v">${m.min ? fmtClock(m.min) : '·'}</span>
           </button>`;
         })}
       </div>

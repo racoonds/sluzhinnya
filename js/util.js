@@ -70,6 +70,12 @@ export function plural(n, [one, few, many]) {
   return many;
 }
 
+/** 60 -> "1:00", 90 -> "1:30" (always with minutes; for compact time labels) */
+export function fmtClock(min) {
+  min = Math.max(0, Math.round(min));
+  return `${Math.floor(min / 60)}:${pad(min % 60)}`;
+}
+
 /** 750 -> "12 год 30 хв" */
 export function fmtHM(min) {
   min = Math.max(0, Math.round(min));

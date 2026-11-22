@@ -128,7 +128,7 @@ const check = (label, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); 
   await A.waitForSelector('#auth', { state: 'detached' });
   await A.waitForSelector('.sheet'); // onboarding goal for a brand-new account
   await A.click('.chip[data-v="30"]'); await A.click('form button[type=submit]'); await A.waitForTimeout(400);
-  await A.click('[data-add-hours]'); await A.click('.chip[data-set="120"]'); await A.fill('textarea[name=note]', 'З групою'); await A.click('.sheet form button[type=submit]'); await A.waitForTimeout(400);
+  await A.click('[data-add-hours]'); await A.click('.chip[data-set="120"]'); await A.click('.sheet [data-note-toggle]'); await A.fill('textarea[name=note]', 'З групою'); await A.click('.sheet form button[type=submit]'); await A.waitForTimeout(400);
   await A.goto(APP + '#/territories'); await A.click('[data-add]'); await A.fill('.sheet input[name=number]', '14');
   await A.setInputFiles('.sheet [data-file]', MAP); await A.waitForSelector('.photo-pick-empty.has-img img'); await A.click('.sheet form button[type=submit]'); await A.waitForTimeout(400);
   await A.goto(APP + '#/note/new'); await A.waitForSelector('.editor'); await A.fill('.editor', 'Повторні відвідини\nОлена, кв. 5'); await A.waitForTimeout(700);
@@ -154,7 +154,7 @@ const check = (label, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); 
   await B.screenshot({ path: `${SHOTS}/b2-home.png` });
 
   /* B edits → A receives */
-  await B.click('[data-edit]'); await B.click('.sheet [data-del]'); await B.click('.sheet [data-ok]'); await B.waitForTimeout(400);
+  await B.click('.mx-col.is-today'); await B.click('.sheet [data-edit]'); await B.click('.sheet [data-del]'); await B.click('.sheet [data-ok]'); await B.waitForTimeout(400);
   await B.goto(APP + '#/notes'); await B.click('.note-card'); await B.waitForSelector('.editor'); await B.fill('.editor', 'Повторні відвідини\nОлена, кв. 5 — субота'); await B.waitForTimeout(700);
   await syncNow(B); await syncNow(A);
   const a = await local(A);

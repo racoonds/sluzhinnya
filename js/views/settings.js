@@ -1,5 +1,5 @@
 // Settings: account & sync, goal, reminders, PIN, backup, theme, privacy info.
-import { $, $$, html, mount, haptic, bytes, fmtHM, isStandalone, plural } from '../util.js';
+import { $, $$, html, mount, haptic, bytes, fmtShort, isStandalone, plural } from '../util.js';
 
 const n = (x, forms) => `${x} ${plural(x, forms)}`;
 import { icon } from '../icons.js';
@@ -15,11 +15,11 @@ import {
 import { exportBackup, parseBackup, importBackup, wipeAll } from '../backup.js';
 import { installable, install } from '../install.js';
 import { db } from '../db.js';
-import { WD_SHORT, fmtDate, toKey } from '../dates.js';
-import { applyTheme, APP_VERSION } from '../theme.js';
+import { WD_SHORT, fmtDate, fmtDateShort, toKey } from '../dates.js';
+import { APP_VERSION } from '../theme.js';
 import { isSignedIn, signOutAndWipe, syncNow, syncStatus, pendingCount, cloudConfigured } from '../sync.js';
 
-const GOAL_NAME = { month: 'на місяць', year: 'на службовий рік', custom: 'на свій період' };
+const GOAL_NAME = { month: '/ місяць', year: '/ рік', custom: '/ період' };
 
 export async function render(root) {
   const s = state.settings;
@@ -27,23 +27,22 @@ export async function render(root) {
   const pin = await hasPin();
   const perm = notifPermission();
   const est = await navigator.storage?.estimate?.().catch(() => null);
-  const persisted = await navigator.storage?.persisted?.().catch(() => false);
   const lastBackup = state.settings.lastBackup || (await db.getKV('lastBackup'));
   const per = goalPeriod(s);
   const st = syncStatus();
 
   mount(root, html`
     <header class="top top-back">
-      <a class="icon-btn" href="#/home" aria-label="Назад">${icon('left')}</a>
-      <div class="top-title"><div class="eyebrow">Служіння</div><h1>Налаштування</h1></div>
+      <a class="icon-btn ghost" href="#/home" aria-label="Назад">${icon('left')}</a>
+      <h1 class="top-h">Налаштування</h1>
     </header>
 
     ${st.signedIn ? html`
-    <h3 class="group-title">Акаунт</h3>
+    <h3 class="group-title">акаунт</h3>
     <div class="group">
       <div class="group-row">
         <span class="avatar">${(st.email || '?').charAt(0).toUpperCase()}</span>
-        <span class="gr-main"><b>${st.email}</b><span>Дані зберігаються в акаунті</span></span>
+        <span class="gr-main"><b>${st.email}</b></span>
       </div>
       <button type="button" class="group-row" data-sync-now>
         <span class="gr-ic" data-sync-ic>${icon(syncIcon(st.state))}</span>
@@ -52,121 +51,102 @@ export async function render(root) {
       </button>
       <button type="button" class="group-row" data-signout>
         <span class="gr-ic">${icon('logout')}</span>
-        <span class="gr-main"><b>Вийти з акаунта</b><span>Дані залишаться в акаунті</span></span>
+        <span class="gr-main"><b>Вийти</b></span>
       </button>
     </div>` : ''}
 
-    <h3 class="group-title">Ціль</h3>
+    <h3 class="group-title">ціль</h3>
     <div class="group">
       <button type="button" class="group-row" data-goal>
         <span class="gr-ic">${icon('target')}</span>
-        <span class="gr-main"><b>${fmtHM(goalMinutes(s))} ${GOAL_NAME[s.goalType]}</b><span>${per.label}</span></span>
+        <span class="gr-main"><b>${fmtShort(goalMinutes(s))} год ${GOAL_NAME[s.goalType]}</b><span>${per.label}</span></span>
         ${icon('right', 'gr-chev')}
       </button>
     </div>
 
-    <h3 class="group-title">Нагадування</h3>
+    <h3 class="group-title">нагадування</h3>
     <div class="group">
       <label class="group-row">
         <span class="gr-ic">${icon('bell')}</span>
-        <span class="gr-main"><b>Нагадувати вносити години</b><span>Якщо за день ще нічого не внесено</span></span>
+        <span class="gr-main"><b>Нагадувати</b></span>
         <span class="switch"><input type="checkbox" role="switch" data-rem ${r.enabled ? html`checked` : ''}><i></i></span>
       </label>
-      <div class="group-row ${r.enabled ? '' : 'is-dim'}">
+      ${r.enabled ? html`
+      <div class="group-row">
         <span class="gr-ic">${icon('clock')}</span>
         <span class="gr-main"><b>Час</b></span>
-        <input type="time" class="time-in" value="${r.time}" data-time ${r.enabled ? '' : html`disabled`}>
+        <input type="time" class="time-in" value="${r.time}" data-time>
       </div>
-      <div class="group-row group-row-col ${r.enabled ? '' : 'is-dim'}">
-        <span class="gr-label">Дні</span>
-        <div class="days">${WD_SHORT.map((w, i) => html`<button type="button" class="day-chip ${r.days.includes(i) ? 'on' : ''}" data-dayc="${i}" ${r.enabled ? '' : html`disabled`}>${w}</button>`)}</div>
+      <div class="group-row group-row-col">
+        <div class="days">${WD_SHORT.map((w, i) => html`<button type="button" class="day-chip ${r.days.includes(i) ? 'on' : ''}" data-dayc="${i}">${w}</button>`)}</div>
       </div>
-      <label class="group-row ${r.enabled ? '' : 'is-dim'}">
+      <label class="group-row">
         <span class="gr-ic">${icon('flag')}</span>
-        <span class="gr-main"><b>План на вихідні</b><span>У суботу о 10:00 — перевірити тижневу норму</span></span>
-        <span class="switch"><input type="checkbox" role="switch" data-weekly ${r.weekly ? html`checked` : ''} ${r.enabled ? '' : html`disabled`}><i></i></span>
+        <span class="gr-main"><b>План на вихідні</b><span>Субота, 10:00</span></span>
+        <span class="switch"><input type="checkbox" role="switch" data-weekly ${r.weekly ? html`checked` : ''}><i></i></span>
       </label>
-    </div>
-    ${r.enabled ? html`
-    <div class="group">
       <button type="button" class="group-row" data-ics>
         <span class="gr-ic gr-ic-accent">${icon('calendar')}</span>
-        <span class="gr-main"><b>Додати в календар телефону</b><span>Найнадійніше: працює на iPhone і Android, навіть коли застосунок закрито</span></span>
+        <span class="gr-main"><b>Додати в календар телефону</b><span>Найнадійніше</span></span>
         ${icon('download', 'gr-chev')}
       </button>
       <button type="button" class="group-row" data-notif>
         <span class="gr-ic">${icon('bell')}</span>
-        <span class="gr-main"><b>Сповіщення від застосунку</b><span>${notifLabel(perm)}</span></span>
-        ${perm === 'granted' ? html`<span class="pill pill-good">Увімкнено</span>` : icon('right', 'gr-chev')}
+        <span class="gr-main"><b>Сповіщення</b><span>${notifLabel(perm)}</span></span>
+        ${perm === 'granted' ? html`<span class="pill pill-good">увімк.</span>` : icon('right', 'gr-chev')}
       </button>
       ${perm === 'granted' ? html`
       <button type="button" class="group-row" data-test>
         <span class="gr-ic">${icon('sparkle')}</span>
-        <span class="gr-main"><b>Надіслати тестове сповіщення</b></span>
-      </button>` : ''}
+        <span class="gr-main"><b>Тестове сповіщення</b></span>
+      </button>` : ''}` : ''}
     </div>
-    <p class="group-hint">Застосунок не має сервера (тому ваші дані нікуди не передаються), а без сервера браузер не може гарантовано будити застосунок у точний час. Тому найкраще — додати нагадування в календар телефону. На головному екрані також зʼявиться підказка, якщо за день нічого не внесено.</p>` : ''}
 
-    <h3 class="group-title">Захист</h3>
+    <h3 class="group-title">захист</h3>
     <div class="group">
       <button type="button" class="group-row" data-pin>
         <span class="gr-ic">${icon('lock')}</span>
-        <span class="gr-main"><b>${pin ? 'PIN-код' : 'Увімкнути PIN-код'}</b><span>${pin ? (cloudConfigured() ? 'Змінити або вимкнути' : 'Змінити PIN') : 'Запитувати PIN при відкритті'}</span></span>
-        ${pin ? html`<span class="pill pill-good">Увімкнено</span>` : icon('right', 'gr-chev')}
+        <span class="gr-main"><b>PIN-код</b>${!pin ? html`<span>Вимкнено</span>` : ''}</span>
+        ${icon('right', 'gr-chev')}
       </button>
       ${pin ? html`
       <div class="group-row group-row-col">
-        <span class="gr-label">Блокувати після виходу з застосунку</span>
-        ${segmented('autolock', [['0', 'Одразу'], ['1', 'Через 1 хв'], ['5', 'Через 5 хв']], String(s.autoLock))}
+        <span class="label">блокувати</span>
+        ${segmented('autolock', [['0', 'Одразу'], ['1', '1 хв'], ['5', '5 хв']], String(s.autoLock))}
       </div>` : ''}
     </div>
-    <div class="privacy card">
-      <div class="privacy-head">${icon('shield')}<b>Як захищені ваші дані</b></div>
-      <ul>
-        ${cloudConfigured() ? html`
-        <li><b>Дані акаунта</b> зберігаються в базі Firebase (Google). Правила безпеки дозволяють читати й змінювати їх лише після входу саме у ваш акаунт; зʼєднання завжди зашифроване.</li>
-        <li><b>Пароль</b> перевіряє Firebase, на телефоні він не зберігається. Від підбору пароля захищає вбудоване обмеження спроб.</li>
-        <li><b>Працює й без інтернету:</b> копія даних лежить на телефоні, а зміни надсилаються, щойно зʼявиться звʼязок.</li>` : html`
-        <li><b>Усе зберігається лише на цьому телефоні.</b> Немає сервера, бази даних чи акаунта — з інтернету нічого не можна «зламати» або «злити».</li>`}
-        <li><b>Атаки DDoS не страшні.</b> Сторінка — це статичні файли на CDN GitHub Pages, а встановлений застосунок працює навіть без інтернету.</li>
-        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) не дає застосунку звертатися до сторонніх сайтів.</li>
-        <li><b>Фото очищаються від метаданих</b> (зокрема GPS) під час збереження.</li>
-        <li><b>PIN</b> зберігається лише як криптографічний хеш, а після 5 помилок вмикається пауза, що зростає.</li>
-        <li><b>Резервна копія</b> — це ваш захист від втрати телефона: зберігайте її в iCloud Drive або на Google Диск (застосунок нагадає раз на місяць).</li>
-      </ul>
-    </div>
+    <ul class="facts">
+      ${cloudConfigured()
+        ? html`<li>${icon('shield')}Дані в Firebase, доступ лише після входу</li><li>${icon('lock')}Пароль на телефоні не зберігається</li>`
+        : html`<li>${icon('shield')}Усе лише на цьому телефоні</li>`}
+      <li>${icon('x')}Без трекерів і сторонніх скриптів</li>
+      <li>${icon('image')}З фото видаляється GPS</li>
+    </ul>
 
-    <h3 class="group-title">Дані</h3>
+    <h3 class="group-title">дані</h3>
     <div class="group">
       <button type="button" class="group-row" data-export>
         <span class="gr-ic">${icon('download')}</span>
-        <span class="gr-main"><b>Зберегти резервну копію</b><span>${lastBackup ? `Остання: ${fmtDate(toKey(new Date(lastBackup)), { year: true })}` : 'Файл з усіма даними та фото'}</span></span>
+        <span class="gr-main"><b>Резервна копія</b><span>${lastBackup ? `остання ${fmtDateShort(toKey(new Date(lastBackup)))}` : 'ще не було'}</span></span>
       </button>
       <label class="group-row">
         <span class="gr-ic">${icon('upload')}</span>
-        <span class="gr-main"><b>Відновити з копії</b><span>Замінить поточні дані</span></span>
+        <span class="gr-main"><b>Відновити з копії</b></span>
         <input type="file" accept="application/json,.json" hidden data-import>
       </label>
+      ${est ? html`
       <div class="group-row">
         <span class="gr-ic">${icon('phone')}</span>
-        <span class="gr-main"><b>Місце на пристрої</b><span>${est ? `Використано ${bytes(est.usage || 0)}` : 'Невідомо'} · ${persisted ? 'захищено від автоочищення' : 'браузер може очистити при нестачі місця'}</span></span>
-      </div>
-    </div>
-    <p class="group-hint">Порада: раз на місяць зберігайте копію (напр. у «Файли» чи Google Диск). Якщо телефон загубиться або браузер очистить дані — ви все відновите.</p>
-
-    <h3 class="group-title">Вигляд</h3>
-    <div class="group">
-      <div class="group-row group-row-col">
-        ${segmented('theme', [['system', 'Як у системі'], ['dark', 'Темна'], ['light', 'Світла']], s.theme)}
-      </div>
+        <span class="gr-main"><b>Займає</b></span>
+        <span class="num">${bytes(est.usage || 0)}</span>
+      </div>` : ''}
     </div>
 
     ${installable() ? html`
-    <h3 class="group-title">Встановлення</h3>
     <div class="group">
       <button type="button" class="group-row" data-install>
         <span class="gr-ic gr-ic-accent">${icon('phone')}</span>
-        <span class="gr-main"><b>Додати на головний екран</b><span>Як звичайний застосунок, працює офлайн</span></span>
+        <span class="gr-main"><b>Додати на головний екран</b></span>
         ${icon('right', 'gr-chev')}
       </button>
     </div>` : ''}
@@ -174,10 +154,10 @@ export async function render(root) {
     <div class="group group-danger">
       <button type="button" class="group-row" data-wipe>
         <span class="gr-ic">${icon('trash')}</span>
-        <span class="gr-main"><b>Видалити всі дані</b><span>Години, території, фото, нотатки</span></span>
+        <span class="gr-main"><b>Видалити всі дані</b></span>
       </button>
     </div>
-    <p class="version">Служіння · версія ${APP_VERSION}${isStandalone() ? ' · встановлено' : ''}</p>
+    <p class="version">v${APP_VERSION}</p>
   `);
 
   const rerender = () => render(root);
@@ -192,10 +172,9 @@ export async function render(root) {
     if (e.target.checked) { if (notifPermission() === 'granted') registerPeriodic(); } else unregisterPeriodic();
     rerender();
   });
-  $('[data-time]', root).addEventListener('change', (e) => { if (/^\d{2}:\d{2}$/.test(e.target.value)) saveRem({ time: e.target.value }); });
-  $('[data-weekly]', root).addEventListener('change', (e) => saveRem({ weekly: e.target.checked }));
+  $('[data-time]', root)?.addEventListener('change', (e) => { if (/^\d{2}:\d{2}$/.test(e.target.value)) saveRem({ time: e.target.value }); });
+  $('[data-weekly]', root)?.addEventListener('change', (e) => saveRem({ weekly: e.target.checked }));
   $$('input[name=autolock]', root).forEach((i) => i.addEventListener('change', () => saveSettings({ autoLock: Number(i.value) })));
-  $$('input[name=theme]', root).forEach((i) => i.addEventListener('change', async () => { await saveSettings({ theme: i.value }); applyTheme(); }));
 
   $('[data-import]', root).addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
@@ -314,13 +293,13 @@ export function syncLine(st) {
 }
 
 function notifLabel(perm) {
-  if (perm === 'granted') return 'Нагадування, поки застосунок встановлено (Android) або відкрито';
-  if (perm === 'denied') return 'Заборонено — увімкніть у налаштуваннях браузера';
+  if (perm === 'granted') return 'Android, або поки застосунок відкрито';
+  if (perm === 'denied') return 'Заборонено в браузері';
   if (perm === 'unsupported') return isStandaloneHint();
-  return 'Дозволити сповіщення';
+  return 'Дозволити';
 }
 function isStandaloneHint() {
-  return isStandalone() ? 'Цей браузер не підтримує сповіщення' : 'На iPhone сповіщення доступні після додавання на головний екран';
+  return isStandalone() ? 'Не підтримується' : 'Після встановлення на екран';
 }
 
 function pinFlow(enabled, done) {

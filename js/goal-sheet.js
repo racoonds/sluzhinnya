@@ -8,9 +8,9 @@ import { todayKey, addKey, isKey, fmtDate, toKey } from './dates.js';
 
 const PRESETS = { month: [15, 30, 50], year: [600], custom: [] };
 const HINT = {
-  month: 'Рахуються години поточного календарного місяця.',
-  year: 'Службовий рік — з 1 вересня до 31 серпня.',
-  custom: 'Свій проміжок — напр. кампанія чи кілька місяців.',
+  month: 'поточний місяць',
+  year: 'вересень — серпень',
+  custom: 'свої дати',
 };
 
 export function openGoalSheet({ first = false } = {}) {
@@ -21,23 +21,22 @@ export function openGoalSheet({ first = false } = {}) {
   let ce = s.customEnd || addKey(todayKey(), 90);
 
   openSheet({
-    title: first ? 'Вітаю! Яка ваша ціль?' : 'Ціль',
+    title: 'Ціль',
     body: html`
       <form class="form" novalidate>
-        ${first ? html`<p class="muted lead">Вкажіть, скільки годин хочете послужити. Застосунок порахує, скільки лишилось і скільки треба в середньому на тиждень.</p>` : ''}
         ${segmented('type', [['month', 'Місяць'], ['year', 'Рік'], ['custom', 'Свій період']], type)}
-        <p class="hint" data-hint></p>
+        <p class="label hint-c" data-hint></p>
         <div class="goal-input">
           <input name="hours" type="number" inputmode="decimal" min="1" max="5000" step="1" aria-label="Годин">
           <span>год</span>
         </div>
         <div class="chips" data-presets></div>
         <div class="grid2" data-custom>
-          <label class="field"><span class="field-label">Початок</span><input type="date" name="cs" value="${cs}"></label>
-          <label class="field"><span class="field-label">Кінець</span><input type="date" name="ce" value="${ce}"></label>
+          <label class="field"><span class="label">від</span><input type="date" name="cs" value="${cs}"></label>
+          <label class="field"><span class="label">до</span><input type="date" name="ce" value="${ce}"></label>
         </div>
-        <div class="preview" data-preview></div>
-        <button type="submit" class="btn btn-primary btn-block">${icon('target')}Зберегти ціль</button>
+        <div class="kv-row preview" data-preview></div>
+        <button type="submit" class="btn btn-primary btn-block">Зберегти</button>
       </form>`,
     onMount(el, close) {
       const form = $('form', el);
@@ -55,9 +54,9 @@ export function openGoalSheet({ first = false } = {}) {
         const p = computeProgress(state.entries, tmp);
         const per = goalPeriod(tmp);
         mount($('[data-preview]', el), html`
-          <div class="preview-row"><span>Період</span><b>${fmtDate(toKey(per.start), { year: true })} – ${fmtDate(toKey(per.end), { year: true })}</b></div>
-          <div class="preview-row"><span>Рівномірно</span><b>≈ ${fmtDec(p.plannedPerWeek)} год/тиж</b></div>
-          <div class="preview-row"><span>З сьогодні треба</span><b>≈ ${fmtDec(p.perWeek)} год/тиж</b></div>`);
+          <div class="kv"><span class="label">на тиждень</span><b>≈${fmtDec(p.perWeek)}</b></div>
+          <div class="kv"><span class="label">на день</span><b>≈${fmtDec(p.perDay)}</b></div>
+          <div class="kv"><span class="label">днів</span><b>${p.daysLeft}</b></div>`);
       };
       draw();
       $$('input[name=type]', el).forEach((r) => r.addEventListener('change', () => { type = r.value; draw(); haptic(); }));

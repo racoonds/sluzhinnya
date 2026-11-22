@@ -43,6 +43,7 @@ const TABS = [
 
 let cleanup = null;
 let currentKey = '';
+let enterTimer;
 let rendering = Promise.resolve();
 
 function parseHash() {
@@ -69,7 +70,11 @@ function render({ keepScroll = false } = {}) {
     }
     $$('.tab', $('#tabbar')).forEach((t) => t.classList.toggle('on', t.dataset.tab === r.tab));
     if (changed && !keepScroll) window.scrollTo(0, 0);
-    if (changed) { view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter'); }
+    if (changed) {
+      view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter');
+      clearTimeout(enterTimer);
+      enterTimer = setTimeout(() => view.classList.remove('enter'), 900); // play entrance animations once per screen
+    }
   });
   return rendering;
 }
@@ -77,7 +82,7 @@ function render({ keepScroll = false } = {}) {
 function renderTabs() {
   mount($('#tabbar'), html`${TABS.map(([k, label, ic]) => (k === 'add'
     ? html`<button type="button" class="tab-add" data-add-hours aria-label="Додати години">${icon('plus')}</button>`
-    : html`<a class="tab" href="#/${k}" data-tab="${k}">${icon(ic)}<span>${label}</span></a>`))}`);
+    : html`<a class="tab" href="#/${k}" data-tab="${k}" aria-label="${label}">${icon(ic)}</a>`))}`);
   $('#tabbar').addEventListener('click', (e) => {
     if (e.target.closest('[data-add-hours]')) {
       haptic(10);
@@ -157,7 +162,6 @@ async function boot() {
     requestAnimationFrame(() => { queued = false; render({ keepScroll: true }); });
   });
   window.addEventListener('hashchange', () => render());
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
   await render();
   document.body.classList.add('ready');

@@ -23,11 +23,11 @@ export function renderList(root) {
 
   mount(root, html`
     <header class="top">
-      <div><div class="eyebrow">${total ? `${total} збережено` : 'Особисте'}</div><h1>Нотатки</h1></div>
+      <h1 class="top-h">Нотатки <span class="num muted">${total || ''}</span></h1>
       <a class="icon-btn icon-btn-accent" href="#/note/new" aria-label="Нова нотатка">${icon('plus')}</a>
     </header>
     ${total ? html`
-      ${total > 4 ? html`<label class="search">${icon('search')}<input type="search" placeholder="Пошук у нотатках" value="${query}" data-q></label>` : ''}
+      ${total > 4 ? html`<label class="search">${icon('search')}<input type="search" placeholder="Пошук" value="${query}" data-q></label>` : ''}
       <div class="notes">
         ${notes.length ? notes.map((n) => html`
           <a class="note-card" href="#/note/${n.id}">
@@ -35,8 +35,8 @@ export function renderList(root) {
             ${rest(n.text) ? html`<span class="note-prev">${rest(n.text)}</span>` : ''}
             <span class="note-date">${relDays(toKey(new Date(n.updatedAt)))}</span>
           </a>`) : html`<div class="empty-inline">Нічого не знайдено.</div>`}
-      </div>` : emptyState('note', 'Тут будуть ваші нотатки', 'Повторні відвідини, адреси, думки для бесід, плани на тиждень — усе зберігається лише на цьому телефоні.',
-      html`<a class="btn btn-primary" href="#/note/new">${icon('plus')}Нова нотатка</a>`)}
+      </div>` : emptyState('note', 'Поки порожньо', 'Адреси, повторні відвідини, думки.',
+      html`<a class="btn btn-primary" href="#/note/new">${icon('plus')}Нова</a>`)}
   `);
 
   const qi = $('[data-q]', root);
@@ -61,7 +61,7 @@ export function renderEditor(root, [id]) {
       <button type="button" class="icon-btn ${note.pinned ? 'is-on' : ''}" data-pin aria-label="Закріпити" aria-pressed="${!!note.pinned}">${icon('pin')}</button>
       <button type="button" class="icon-btn" data-del aria-label="Видалити">${icon('trash')}</button>
     </header>
-    <textarea class="editor" data-text maxlength="20000" placeholder="Почніть писати…&#10;&#10;Перший рядок стане заголовком.">${note.text}</textarea>
+    <textarea class="editor" data-text maxlength="20000" placeholder="Почніть писати…">${note.text}</textarea>
   `);
 
   const ta = $('[data-text]', root);

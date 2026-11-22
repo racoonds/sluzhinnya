@@ -127,14 +127,14 @@ export function showPinSetup() {
     el.setAttribute('aria-label', 'Створення PIN-коду');
     document.body.append(el);
     document.body.classList.add('is-locked');
-    const intro = 'Застосунок проситиме його щоразу при відкритті. Запамʼятайте: відновити PIN неможливо.';
+    const intro = 'Запамʼятайте — відновити неможливо';
     let first = null;
     pinPad(el, {
-      title: 'Придумайте PIN-код',
+      title: 'Новий PIN',
       subtitle: intro,
       async onComplete(p, api) {
-        if (!first) { first = p; api.reset(); api.setTitle('Повторіть PIN-код'); api.setSub('Ще раз ті самі 4 цифри'); return; }
-        if (p !== first) { first = null; api.shake(); api.reset(); api.setTitle('Придумайте PIN-код'); api.setSub('PIN не збігся — спробуйте ще раз', true); return; }
+        if (!first) { first = p; api.reset(); api.setTitle('Ще раз'); api.setSub(''); return; }
+        if (p !== first) { first = null; api.shake(); api.reset(); api.setTitle('Новий PIN'); api.setSub('Не збігся', true); return; }
         api.setBusy(true);
         await setPin(p);
         haptic(15);
@@ -162,8 +162,8 @@ export function showLock({ onWipe } = {}) {
     let timer;
 
     const pad = pinPad(el, {
-      title: 'Служіння',
-      subtitle: 'Введіть PIN-код',
+      title: 'PIN',
+      subtitle: '',
       async onComplete(pin, api) {
         const lo = await lockoutState();
         if (lo.until > Date.now()) { api.reset(); return; }
@@ -185,7 +185,7 @@ export function showLock({ onWipe } = {}) {
         api.shake();
         api.reset();
         if (s.until > Date.now()) countdown();
-        else api.setSub(`Неправильний PIN. Залишилось спроб до паузи: ${5 - s.fails}`, true);
+        else api.setSub(`Неправильно · ще ${5 - s.fails}`, true);
       },
     });
 
@@ -194,9 +194,9 @@ export function showLock({ onWipe } = {}) {
       const tick = async () => {
         const s = await lockoutState();
         const left = Math.ceil((s.until - Date.now()) / 1000);
-        if (left <= 0) { clearInterval(timer); el.classList.remove('is-wait'); pad.setSub('Введіть PIN-код'); return; }
+        if (left <= 0) { clearInterval(timer); el.classList.remove('is-wait'); pad.setSub(''); return; }
         el.classList.add('is-wait');
-        pad.setSub(`Забагато спроб. Зачекайте ${left >= 60 ? `${Math.ceil(left / 60)} хв` : `${left} с`}`, true);
+        pad.setSub(`Зачекайте ${left >= 60 ? `${Math.ceil(left / 60)} хв` : `${left} с`}`, true);
       };
       await tick();
       timer = setInterval(tick, 1000);

@@ -14,7 +14,8 @@ export const STATUS = {
   progress: 'В процесі',
   done: 'Опрацьовано',
 };
-const LONG_DAYS = 120; // highlight territories held longer than ~4 months
+const LONG_DAYS = 120;
+const SHORT = { new: 'нова', progress: 'в процесі', done: 'готово' }; // highlight territories held longer than ~4 months
 
 let filter = 'all';
 let query = '';
@@ -33,7 +34,7 @@ export function renderList(root) {
 
   mount(root, html`
     <header class="top">
-      <div><div class="eyebrow">${all.length} ${plural(all.length, ['територія', 'території', 'територій'])}</div><h1>Території</h1></div>
+      <h1 class="top-h">Території <span class="num muted">${all.length || ''}</span></h1>
       <button type="button" class="icon-btn icon-btn-accent" data-add aria-label="Додати територію">${icon('plus')}</button>
     </header>
 
@@ -45,11 +46,11 @@ export function renderList(root) {
           </button>`)}
       </div>
       ${all.length > 5 ? html`
-        <label class="search">${icon('search')}<input type="search" placeholder="Пошук за номером чи назвою" value="${query}" data-q></label>` : ''}
+        <label class="search">${icon('search')}<input type="search" placeholder="Пошук" value="${query}" data-q></label>` : ''}
       <div class="terr-list">
         ${items.length ? items.map(card) : html`<div class="empty-inline">Нічого не знайдено.</div>`}
-      </div>` : emptyState('map', 'Додайте першу територію', 'Зберігайте номер, фото карти, статус і нотатки. Відмічайте, коли територію опрацьовано.',
-      html`<button type="button" class="btn btn-primary" data-add>${icon('plus')}Додати територію</button>`)}
+      </div>` : emptyState('map', 'Поки порожньо', 'Номер, фото карти, статус.',
+      html`<button type="button" class="btn btn-primary" data-add>${icon('plus')}Додати</button>`)}
   `);
 
   loadThumbs(root);
@@ -77,16 +78,16 @@ function card(t) {
   const lw = lastWorked(t);
   const held = t.status !== 'done' && isKey(t.assignedAt) ? diffDays(fromKey(t.assignedAt), new Date()) : 0;
   const sub = t.status === 'done'
-    ? (t.completedAt ? `Опрацьовано ${fmtDateShort(t.completedAt)}` : STATUS.done)
-    : `${STATUS[t.status]} · ${lw ? `востаннє ${relDays(lw)}` : isKey(t.assignedAt) ? `взято ${relDays(t.assignedAt)}` : 'без дати'}`;
+    ? (t.completedAt ? fmtDateShort(t.completedAt) : '')
+    : lw ? relDays(lw) : isKey(t.assignedAt) ? `взято ${relDays(t.assignedAt)}` : '';
   return html`
     <button type="button" class="terr" data-open="${t.id}">
       <span class="terr-thumb">${t.photoId ? html`<img alt="" data-photo="${t.photoId}">` : icon('map')}</span>
       <span class="terr-main">
-        <span class="terr-title"><b>${title(t)}</b>${t.name ? html` <span>${t.name}</span>` : ''}</span>
-        <span class="terr-sub ${held > LONG_DAYS ? 'is-warn' : ''}">${sub}${held > LONG_DAYS ? ` · у вас ${held} дн.` : ''}</span>
+        <span class="terr-title"><b>${t.number || '—'}</b>${t.name ? html` <span>${t.name}</span>` : ''}</span>
+        <span class="terr-sub ${held > LONG_DAYS ? 'is-warn' : ''}">${sub}${held > LONG_DAYS ? ` · ${held} дн.` : ''}</span>
       </span>
-      ${statusIcon(t.status)}
+      <span class="spill s-${t.status}">${statusIcon(t.status)}${SHORT[t.status]}</span>
     </button>`;
 }
 
@@ -114,7 +115,7 @@ function openAddSheet() {
           <span class="field-label">Фото території</span>
           <label class="photo-pick" data-pick>
             <input type="file" accept="image/*" hidden data-file>
-            <span class="photo-pick-empty">${icon('camera')}<span>Сфотографуйте або оберіть фото карти</span></span>
+            <span class="photo-pick-empty">${icon('camera')}<span>Фото карти</span></span>
           </label>
         </div>
         <div class="field"><span class="field-label">Статус</span>
@@ -190,7 +191,7 @@ export function renderDetail(root, [id]) {
         </div>` : html`
         <label class="photo-pick photo-pick-lg">
           <input type="file" accept="image/*" hidden data-file>
-          <span class="photo-pick-empty">${icon('camera')}<span>Додати фото території</span><em>Сфотографуйте карту або оберіть з галереї</em></span>
+          <span class="photo-pick-empty">${icon('camera')}<span>Фото карти</span></span>
         </label>`}
     </section>
 
@@ -206,8 +207,8 @@ export function renderDetail(root, [id]) {
         <label class="field"><span class="field-label">Взято</span><input type="date" data-f="assignedAt" value="${t.assignedAt || ''}" max="${todayKey()}"></label>
         <label class="field ${t.status !== 'done' ? 'is-dim' : ''}"><span class="field-label">Опрацьовано</span><input type="date" data-f="completedAt" value="${t.completedAt || ''}" max="${todayKey()}"></label>
       </div>
-      ${t.status !== 'done' && held > 0 ? html`<p class="hint ${held > LONG_DAYS ? 'is-warn' : ''}">${icon('clock', 'inline-i')} Територія у вас ${held} ${plural(held, ['день', 'дні', 'днів'])}.</p>` : ''}
-      ${t.status === 'done' ? html`<button type="button" class="btn btn-block btn-soft" data-again>${icon('history')}Взяти знову (нове коло)</button>` : ''}
+      ${t.status !== 'done' && held > 0 ? html`<p class="label ${held > LONG_DAYS ? 'is-warn' : ''}">${icon('clock', 'inline-i')} ${held} ${plural(held, ['день', 'дні', 'днів'])} у вас</p>` : ''}
+      ${t.status === 'done' ? html`<button type="button" class="btn btn-block btn-soft" data-again>${icon('history')}Взяти знову</button>` : ''}
     </section>
 
     <section class="section">
@@ -217,12 +218,12 @@ export function renderDetail(root, [id]) {
           <span class="row-ic">${icon('check')}</span>
           <span class="row-main"><span class="row-title">${fmtDate(h.date)}</span>${h.note ? html`<span class="row-sub">${h.note}</span>` : ''}</span>
           <button type="button" class="icon-btn icon-btn-sm" data-del-h="${h.id}" aria-label="Видалити запис">${icon('x')}</button>
-        </div>`)}</div>` : html`<div class="empty-inline">Відмічайте кожен вихід на територію — так видно, коли ви були там востаннє.</div>`}
+        </div>`)}</div>` : ''}
     </section>
 
     <section class="section">
       <div class="section-head"><h2>Нотатки</h2><span class="saved" data-saved></span></div>
-      <textarea class="note-area" data-f="notes" rows="4" maxlength="5000" placeholder="Напр.: у будинку 12 — домофон, у 3-му підʼїзді просили не дзвонити…">${t.notes}</textarea>
+      <textarea class="note-area" data-f="notes" rows="3" maxlength="5000" placeholder="…">${t.notes}</textarea>
     </section>
 
     <button type="button" class="btn btn-block btn-ghost-danger" data-delete>${icon('trash')}Видалити територію</button>
@@ -329,9 +330,9 @@ function openLogSheet(t) {
     body: html`
       <form class="form" novalidate>
         <label class="field"><span class="field-label">Дата</span><input type="date" name="date" value="${todayKey()}" max="${todayKey()}"></label>
-        <label class="field"><span class="field-label">Нотатка <em>необовʼязково</em></span>
-          <textarea name="note" rows="2" maxlength="500" placeholder="Напр.: вул. Лесі Українки 1–15, нікого не було в №7"></textarea></label>
-        <label class="check"><input type="checkbox" name="done" ${t.status === 'done' ? html`checked` : ''}><span class="check-box">${icon('check')}</span><span>Територію опрацьовано повністю</span></label>
+        <label class="field"><span class="label">нотатка</span>
+          <textarea name="note" rows="2" maxlength="500"></textarea></label>
+        <label class="check"><input type="checkbox" name="done" ${t.status === 'done' ? html`checked` : ''}><span class="check-box">${icon('check')}</span><span>Опрацьовано повністю</span></label>
         <button type="submit" class="btn btn-primary btn-block">${icon('check')}Зберегти</button>
       </form>`,
     onMount(el, close) {

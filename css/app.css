@@ -135,7 +135,7 @@ img { display: block; max-width: 100%; }
 .view.enter { animation: viewIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } }
 body:not(.ready) .tabbar { opacity: 0; }
-body.is-locked .app { visibility: hidden; }
+body.is-locked .app, body.is-gated .app { visibility: hidden; }
 
 .top {
   display: flex;
@@ -953,6 +953,35 @@ button.group-row:active, label.group-row:active { background: var(--bg-3); }
   .pin-key { width: 62px; height: 62px; font-size: 24px; }
   .pin-dots { margin: 16px 0 18px; }
 }
+
+/* ---------- sign in / register ---------- */
+
+.auth {
+  position: fixed; inset: 0; z-index: 90;
+  overflow-y: auto;
+  background: var(--bg);
+  display: flex; justify-content: center;
+  padding: calc(var(--sat) + 28px) var(--gutter) calc(var(--sab) + 24px);
+  transition: opacity 0.25s;
+}
+.auth::before { content: ""; position: fixed; inset: 0 0 auto; height: 50%; background: radial-gradient(520px 280px at 50% 0, var(--glow), transparent 70%); pointer-events: none; }
+.auth.leaving { opacity: 0; }
+.auth-box { position: relative; width: 100%; max-width: 380px; display: flex; flex-direction: column; align-items: center; margin: auto 0; }
+.auth-logo { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 8px 28px rgba(113, 112, 255, 0.35); margin-bottom: 14px; }
+.auth-title { font-size: 26px; }
+.auth-sub { margin: 6px 0 20px; text-align: center; color: var(--muted); font-size: 14.5px; max-width: 320px; }
+.auth-tabs { width: 100%; margin-bottom: 16px; }
+.auth-form { width: 100%; }
+.auth-msg { min-height: 20px; margin: -4px 0 -6px; font-size: 13.5px; color: var(--warn); }
+.auth-msg:empty { display: none; }
+.auth-msg.is-ok { color: var(--good); }
+.auth-link { align-self: center; padding: 6px 10px; }
+.auth-foot { margin-top: 22px; font-size: 12.5px; color: var(--faint); text-align: center; }
+.auth.is-busy .auth-form { opacity: 0.75; pointer-events: none; }
+.pw { position: relative; display: block; }
+.pw input { padding-right: 46px; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; display: grid; place-items: center; color: var(--muted); border-radius: 8px; }
+.pw-eye .i { width: 19px; height: 19px; }
 
 /* ---------- motion ---------- */
 

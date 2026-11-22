@@ -1,4 +1,4 @@
-// Settings: Google account sync, goal, reminders, PIN, backup, theme, privacy info.
+// Settings: account & sync, goal, reminders, PIN, backup, theme, privacy info.
 import { $, $$, html, mount, haptic, bytes, fmtHM, isStandalone, plural } from '../util.js';
 
 const n = (x, forms) => `${x} ${plural(x, forms)}`;
@@ -17,7 +17,7 @@ import { installable, install } from '../install.js';
 import { db } from '../db.js';
 import { WD_SHORT, fmtDate, toKey } from '../dates.js';
 import { applyTheme, APP_VERSION } from '../theme.js';
-import { cloudConfigured, isSignedIn, signIn, signOut, syncNow, syncStatus } from '../sync.js';
+import { isSignedIn, signOutAndWipe, syncNow, syncStatus, pendingCount } from '../sync.js';
 
 const GOAL_NAME = { month: 'на місяць', year: 'на службовий рік', custom: 'на свій період' };
 
@@ -38,43 +38,23 @@ export async function render(root) {
       <div class="top-title"><div class="eyebrow">Служіння</div><h1>Налаштування</h1></div>
     </header>
 
+    ${st.signedIn ? html`
     <h3 class="group-title">Акаунт</h3>
-    ${!cloudConfigured() ? html`
-    <div class="group">
-      <div class="group-row is-dim">
-        <span class="gr-ic">${icon('cloud')}</span>
-        <span class="gr-main"><b>Вхід через Google</b><span>Ще не налаштовано (потрібне одноразове налаштування Firebase)</span></span>
-      </div>
-    </div>` : !st.signedIn ? html`
-    <div class="group">
-      <button type="button" class="group-row" data-signin>
-        <span class="gr-ic gr-ic-accent">${icon('cloud')}</span>
-        <span class="gr-main"><b>Увійти через Google</b><span>Дані збережуться у вашому акаунті й зʼявляться на інших пристроях</span></span>
-        ${icon('right', 'gr-chev')}
-      </button>
-    </div>
-    <p class="group-hint">Без входу все працює як раніше — дані лише на цьому телефоні.</p>` : html`
     <div class="group">
       <div class="group-row">
-        <span class="avatar">${(st.name || st.email || '?').trim().charAt(0).toUpperCase()}</span>
-        <span class="gr-main"><b>${st.name || 'Google-акаунт'}</b><span>${st.email}</span></span>
+        <span class="avatar">${(st.email || '?').charAt(0).toUpperCase()}</span>
+        <span class="gr-main"><b>${st.email}</b><span>Дані зберігаються в акаунті</span></span>
       </div>
-      ${st.state === 'relogin' ? html`
-      <button type="button" class="group-row" data-signin>
-        <span class="gr-ic gr-ic-warn">${icon('cloudOff')}</span>
-        <span class="gr-main"><b>Увійти ще раз</b><span>Сеанс завершився — зміни зберігаються на телефоні й надішлються після входу</span></span>
-        ${icon('right', 'gr-chev')}
-      </button>` : html`
       <button type="button" class="group-row" data-sync-now>
         <span class="gr-ic" data-sync-ic>${icon(syncIcon(st.state))}</span>
         <span class="gr-main"><b>Синхронізація</b><span data-sync-line>${syncLine(st)}</span></span>
         <span class="gr-act ${st.state === 'syncing' ? 'is-spin' : ''}" data-sync-spin>${icon('refresh')}</span>
-      </button>`}
+      </button>
       <button type="button" class="group-row" data-signout>
         <span class="gr-ic">${icon('logout')}</span>
-        <span class="gr-main"><b>Вийти з акаунта</b><span>Дані на цьому телефоні залишаться</span></span>
+        <span class="gr-main"><b>Вийти з акаунта</b><span>Дані залишаться в акаунті</span></span>
       </button>
-    </div>`}
+    </div>` : ''}
 
     <h3 class="group-title">Ціль</h3>
     <div class="group">
@@ -143,10 +123,11 @@ export async function render(root) {
     <div class="privacy card">
       <div class="privacy-head">${icon('shield')}<b>Як захищені ваші дані</b></div>
       <ul>
-        <li><b>Без входу все зберігається лише на цьому телефоні.</b> Немає нашого сервера чи спільної бази — нічого «злити».</li>
-        <li><b>З входом через Google</b> копія зберігається у вашому власному проєкті Firebase. Правила безпеки дозволяють читати й змінювати її лише вашому Google-акаунту, а зʼєднання завжди зашифроване.</li>
+        <li><b>Дані акаунта</b> зберігаються в базі Firebase (Google). Правила безпеки дозволяють читати й змінювати їх лише після входу саме у ваш акаунт; зʼєднання завжди зашифроване.</li>
+        <li><b>Пароль</b> перевіряє Firebase, на телефоні він не зберігається. Від підбору пароля захищає вбудоване обмеження спроб.</li>
+        <li><b>Працює й без інтернету:</b> копія даних лежить на телефоні, а зміни надсилаються, щойно зʼявиться звʼязок.</li>
         <li><b>Атаки DDoS не страшні.</b> Сторінка — це статичні файли на CDN GitHub Pages, а встановлений застосунок працює навіть без інтернету.</li>
-        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) дозволяє звертатися лише до сервісів входу та бази Google.</li>
+        <li><b>Жодних сторонніх скриптів, аналітики чи шрифтів з інтернету.</b> Сувора політика безпеки (CSP) дозволяє звертатися лише до сервісів входу та бази Firebase.</li>
         <li><b>Фото очищаються від метаданих</b> (зокрема GPS) під час збереження.</li>
         <li><b>PIN</b> зберігається лише як криптографічний хеш, а після 5 помилок вмикається пауза, що зростає.</li>
       </ul>
@@ -232,7 +213,7 @@ export async function render(root) {
 
   const onSync = (ev) => {
     const d = ev.detail;
-    if (d.signedIn !== st.signedIn || (d.state === 'relogin') !== (st.state === 'relogin')) { rerender(); return; }
+    if (d.signedIn !== st.signedIn) { rerender(); return; }
     const line = $('[data-sync-line]', root);
     if (line) line.textContent = syncLine(d);
     const ic = $('[data-sync-ic]', root);
@@ -244,16 +225,17 @@ export async function render(root) {
 
   root.onclick = async (e) => {
     const t = e.target;
-    if (t.closest('[data-signin]')) {
-      try { await signIn(); } catch (err) { toast(err.message, { kind: 'warn' }); }
-      return;
-    }
     if (t.closest('[data-sync-now]')) { haptic(); syncNow(); return; }
     if (t.closest('[data-signout]')) {
-      if (!(await confirmDialog('Синхронізацію буде вимкнено. Дані на цьому телефоні та копія в Google-акаунті залишаться.', { title: 'Вийти з акаунта?', ok: 'Вийти', danger: false }))) return;
-      await signOut();
-      toast('Ви вийшли з акаунта');
-      return rerender();
+      if (pendingCount() && navigator.onLine) { toast('Надсилаю останні зміни…'); await syncNow(); }
+      const left = pendingCount();
+      const msg = left
+        ? `Увага: ${left} змін ще не надіслано в акаунт (немає інтернету) — після виходу вони зникнуть. Краще дочекатися інтернету.`
+        : 'Усе збережено в акаунті. Після виходу дані буде прибрано з цього телефона — увійдіть знову, і вони повернуться.';
+      if (!(await confirmDialog(msg, { title: 'Вийти з акаунта?', ok: 'Вийти', danger: !!left }))) return;
+      await signOutAndWipe();
+      location.reload();
+      return;
     }
     if (t.closest('[data-goal]')) return openGoalSheet();
     const dc = t.closest('[data-dayc]');
@@ -295,11 +277,11 @@ export async function render(root) {
     }
     if (t.closest('[data-install]')) return install();
     if (t.closest('[data-wipe]')) {
-      if (!(await confirmDialog(`Буде видалено всі години, території, фото та нотатки на цьому пристрої${isSignedIn() ? ' і виконано вихід з акаунта (копія в Google-акаунті залишиться)' : ''}. Радимо спершу зберегти резервну копію.`, { title: 'Видалити всі дані?', ok: 'Видалити все' }))) return;
+      if (!(await confirmDialog(`Буде видалено всі години, території, фото та нотатки на цьому пристрої${isSignedIn() ? ' і виконано вихід з акаунта (дані в акаунті залишаться)' : ''}. Радимо спершу зберегти резервну копію.`, { title: 'Видалити всі дані?', ok: 'Видалити все' }))) return;
       if (!(await confirmDialog('Це остаточно. Продовжити?', { title: 'Точно?', ok: 'Так, видалити' }))) return;
       await wipeAll();
-      toast('Усі дані видалено');
-      location.hash = '#/home';
+      location.replace(location.pathname + '#/home');
+      location.reload();
     }
   };
   return () => { root.onclick = null; window.removeEventListener('sync-status', onSync); clearInterval(tick); };

@@ -1,5 +1,6 @@
-// Sign in with Google + cloud sync to the owner's own Firebase project (Firestore).
+// Email + password accounts and cloud sync, backed by the owner's Firebase project (Auth + Firestore).
 // Plain REST calls — no SDK and no third-party scripts, so the strict CSP stays intact.
+// Passwords are never stored on the device: only Firebase's refresh token is kept.
 //
 // Model: the app stays local-first (IndexedDB). Every local change is marked "dirty" with its timestamp,
 // pushed as one Firestore document per record, and other devices pull documents newer than their cursor.
@@ -7,14 +8,14 @@
 import { CLOUD, cloudConfigured } from './config.js';
 import { db } from './db.js';
 import { state, load, emit, setChangeHook, forgetPhotoURL } from './store.js';
-import { normEntry, normNote, normTerritory, normGoal, setBackupHooks } from './backup.js';
+import { normEntry, normNote, normTerritory, normGoal, setBackupHooks, wipeAll } from './backup.js';
 import { shrinkToFit } from './photos.js';
 
 const STORES = ['entries', 'notes', 'territories'];
 const NORM = { entries: normEntry, notes: normNote, territories: (t) => normTerritory(t) };
 const PHOTO_MAX = 850 * 1024;
 
-let session = null;   // { uid, email, name, idToken, refreshToken, expiresAt, cursor, photoCursor, lastSync, relogin }
+let session = null;   // { uid, email, idToken, refreshToken, expiresAt, cursor, photoCursor, lastSync, relogin }
 let dirty = {};       // "store:id" -> timestamp of the local change not yet uploaded
 let status = { state: 'off', at: 0, error: '' };
 let timer = null;
@@ -23,21 +24,22 @@ let again = false;
 
 export { cloudConfigured };
 export const isSignedIn = () => !!session;
+/** The app requires an account once Firebase is configured. */
+export const needsAuth = () => cloudConfigured() && (!session || !!session.relogin);
+export const sessionEmail = () => session?.email || '';
 export const pendingCount = () => Object.keys(dirty).length;
-export const syncStatus = () => ({ ...status, signedIn: !!session, email: session?.email || '', name: session?.name || '', pending: pendingCount() });
+export const syncStatus = () => ({ ...status, signedIn: !!session, email: session?.email || '', pending: pendingCount() });
 
 function setStatus(patch) {
   status = { ...status, ...patch };
   window.dispatchEvent(new CustomEvent('sync-status', { detail: syncStatus() }));
 }
 
-const redirectUri = () => new URL('./', location.href.split('#')[0]).href;
-const rand = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 
 /* ---------- HTTP ---------- */
 
 async function api(url, body, { token, form = false } = {}) {
-  const headers = {};
+  const headers = { 'X-Firebase-Locale': 'uk' };
   if (token) headers.Authorization = `Bearer ${token}`;
   let payload;
   if (form) { headers['Content-Type'] = 'application/x-www-form-urlencoded'; payload = body; } else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
@@ -90,67 +92,77 @@ function b64Blob(b64, type = 'image/jpeg') {
     return new Blob([bytes], { type });
   } catch { return null; }
 }
-function jwtClaims(t) {
+/* ---------- accounts ---------- */
+
+const authUrl = (method) => `https://identitytoolkit.googleapis.com/v1/accounts:${method}?key=${encodeURIComponent(CLOUD.apiKey)}`;
+
+const AUTH_ERRORS = {
+  EMAIL_EXISTS: 'Такий email уже зареєстровано — увійдіть',
+  INVALID_EMAIL: 'Перевірте email — схоже, у ньому помилка',
+  MISSING_EMAIL: 'Вкажіть email',
+  MISSING_PASSWORD: 'Вкажіть пароль',
+  WEAK_PASSWORD: 'Пароль закороткий — мінімум 8 символів',
+  INVALID_LOGIN_CREDENTIALS: 'Неправильний email або пароль',
+  INVALID_PASSWORD: 'Неправильний email або пароль',
+  EMAIL_NOT_FOUND: 'Неправильний email або пароль',
+  USER_DISABLED: 'Цей акаунт заблоковано',
+  TOO_MANY_ATTEMPTS_TRY_LATER: 'Забагато спроб. Зачекайте кілька хвилин і спробуйте знову',
+  OPERATION_NOT_ALLOWED: 'Вхід за email ще не увімкнено в Firebase',
+  ADMIN_ONLY_OPERATION: 'Реєстрацію вимкнено власником застосунку',
+};
+
+async function authCall(method, body) {
   try {
-    const p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(p), (c) => c.charCodeAt(0))));
-  } catch { return null; }
-}
-
-/* ---------- auth ---------- */
-
-export async function signIn() {
-  if (!cloudConfigured()) throw new Error('Вхід через Google ще не налаштовано');
-  const nonce = rand(), st = rand();
-  await db.setKV('oauth', { nonce, state: st, at: Date.now(), back: location.hash || '#/settings' });
-  const p = new URLSearchParams({
-    client_id: CLOUD.clientId, redirect_uri: redirectUri(), response_type: 'id_token',
-    scope: 'openid email profile', nonce, state: st, prompt: 'select_account',
-  });
-  location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${p}`);
-}
-
-/** Called on boot, before routing: finishes a Google sign-in that came back in the URL fragment. */
-export async function handleAuthRedirect() {
-  const h = location.hash;
-  if (!/(?:^#|&)(?:id_token|error)=/.test(h)) return null;
-  const params = new URLSearchParams(h.slice(1));
-  const saved = await db.getKV('oauth');
-  await db.setKV('oauth', null);
-  history.replaceState(null, '', location.pathname + location.search + (saved?.back || '#/settings'));
-  if (!cloudConfigured()) return null;
-  if (params.get('error')) return { error: params.get('error') === 'access_denied' ? 'Вхід скасовано' : `Google: ${params.get('error')}` };
-  if (!saved || params.get('state') !== saved.state || Date.now() - saved.at > 15 * 60000) return { error: 'Сеанс входу застарів — спробуйте ще раз' };
-  const idt = params.get('id_token') || '';
-  const claims = jwtClaims(idt);
-  if (!claims || claims.nonce !== saved.nonce || claims.aud !== CLOUD.clientId) return { error: 'Не вдалося перевірити вхід — спробуйте ще раз' };
-  try {
-    const j = await api(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(CLOUD.apiKey)}`, {
-      postBody: `id_token=${encodeURIComponent(idt)}&providerId=google.com`,
-      requestUri: redirectUri(), returnSecureToken: true, returnIdpCredential: true,
-    });
-    session = {
-      uid: j.localId, email: j.email || claims.email || '', name: j.displayName || j.fullName || claims.name || '',
-      idToken: j.idToken, refreshToken: j.refreshToken, expiresAt: Date.now() + Number(j.expiresIn || 3600) * 1000 - 120000,
-      cursor: null, photoCursor: null, lastSync: 0, relogin: false,
-    };
-    await db.setKV('cloud', session);
-    await markAll();
-    setStatus({ state: 'idle', error: '' });
-    syncSoon(100);
-    return { ok: true, email: session.email };
+    return await api(authUrl(method), body);
   } catch (e) {
-    return { error: `Не вдалося увійти: ${e.message}` };
+    if (e instanceof TypeError) throw new Error('Немає зʼєднання з інтернетом');
+    const code = String(e.message || '').split(/[\s:]/)[0];
+    throw new Error(AUTH_ERRORS[code] || `Помилка входу: ${e.message}`);
   }
 }
 
-export async function signOut() {
-  session = null;
+export async function register(email, password) {
+  return startSession(await authCall('signUp', { email: email.trim(), password, returnSecureToken: true }));
+}
+
+export async function login(email, password) {
+  return startSession(await authCall('signInWithPassword', { email: email.trim(), password, returnSecureToken: true }));
+}
+
+export async function resetPassword(email) {
+  await authCall('sendOobCode', { requestType: 'PASSWORD_RESET', email: email.trim() });
+}
+
+async function clearLocalData() {
+  const keepTheme = state.settings.theme;
+  await db.replaceAll({ entries: [], notes: [], territories: [], photos: [] });
+  await db.setKV('settings', { theme: keepTheme });
+  await db.setKV('timer', null);
   dirty = {};
+  await saveDirty();
+}
+
+async function startSession(j) {
+  const owner = await db.getKV('owner');
+  if (owner && owner !== j.localId) await clearLocalData(); // this phone held someone else's data
+  const same = session && session.uid === j.localId;
+  session = {
+    uid: j.localId, email: j.email || '',
+    idToken: j.idToken, refreshToken: j.refreshToken, expiresAt: Date.now() + Number(j.expiresIn || 3600) * 1000 - 120000,
+    cursor: same ? session.cursor : null, photoCursor: same ? session.photoCursor : null, lastSync: same ? session.lastSync : 0, relogin: false,
+  };
+  await db.setKV('cloud', session);
+  await db.setKV('owner', j.localId);
+  await load();
+  if (!owner) await markAll(); // data created before the account existed goes into it
+  setStatus({ state: 'idle', error: '' });
+  return session;
+}
+
+/** Sign out and remove this account's data from the phone (it stays in the account). */
+export async function signOutAndWipe() {
   clearTimeout(timer);
-  await db.setKV('cloud', null);
-  await db.setKV('dirty', {});
-  setStatus({ state: 'off', at: 0, error: '' });
+  await wipeAll(); // also resets the session through the afterWipe hook
 }
 
 async function getToken() {
@@ -207,7 +219,7 @@ export async function initSync() {
   setChangeHook(onLocalChange);
   setBackupHooks({
     afterImport: () => { if (session) markAll().then(() => syncSoon(500)); },
-    afterWipe: () => { session = null; dirty = {}; setStatus({ state: 'off', at: 0, error: '' }); },
+    afterWipe: () => { session = null; dirty = {}; clearTimeout(timer); setStatus({ state: 'off', at: 0, error: '' }); },
   });
   window.addEventListener('online', () => syncSoon(500));
   if (session) {

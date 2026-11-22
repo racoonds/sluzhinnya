@@ -14,7 +14,8 @@ import { openGoalSheet } from './goal-sheet.js';
 import { scheduleInApp, registerPeriodic, notifPermission } from './reminders.js';
 import { wipeAll } from './backup.js';
 import { applyTheme } from './theme.js';
-import { initSync, handleAuthRedirect, syncSoon, syncNow, pendingCount, isSignedIn, syncStatus } from './sync.js';
+import { initSync, needsAuth, syncSoon, syncNow, pendingCount, isSignedIn, syncStatus, sessionEmail } from './sync.js';
+import { showAuthGate, gateOpen } from './auth-gate.js';
 
 // Refuse to run inside someone else's frame (clickjacking).
 if (window.top !== window.self) {
@@ -133,9 +134,16 @@ async function boot() {
     return;
   }
   applyTheme();
-  const auth = await handleAuthRedirect(); // finishes "Sign in with Google" (must run before routing)
   await initSync();
   renderTabs();
+  // Accounts are on: nobody gets in without signing in or registering.
+  if (needsAuth()) await showAuthGate(isSignedIn() ? { reason: 'Сеанс завершився — увійдіть знову.', email: sessionEmail() } : {});
+  window.addEventListener('sync-status', (e) => {
+    if (e.detail.state === 'relogin' && !gateOpen()) {
+      closeAllOverlays();
+      showAuthGate({ reason: 'Сеанс завершився (можливо, пароль змінено) — увійдіть знову.', email: sessionEmail() });
+    }
+  });
   pinOn = await hasPin();
   if (pinOn) lock();
 
@@ -150,8 +158,6 @@ async function boot() {
 
   await render();
   document.body.classList.add('ready');
-  if (auth?.ok) toast(`Ви увійшли як ${auth.email}. Синхронізую дані…`, { ms: 4500 });
-  else if (auth?.error) toast(auth.error, { kind: 'warn', ms: 5000 });
 
   if (pinOn) await new Promise((res) => { const iv = setInterval(() => { if (!isLocked()) { clearInterval(iv); res(); } }, 150); });
 

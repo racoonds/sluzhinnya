@@ -137,7 +137,6 @@ async function clearLocalData() {
   const keepTheme = state.settings.theme;
   await db.replaceAll({ entries: [], notes: [], territories: [], photos: [] });
   await db.setKV('settings', { theme: keepTheme });
-  await db.setKV('timer', null);
   dirty = {};
   await saveDirty();
 }

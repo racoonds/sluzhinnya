@@ -34,7 +34,7 @@ export function renderList(root) {
 
   mount(root, html`
     <header class="top">
-      <h1 class="top-h">Території <span class="num muted">${all.length || ''}</span></h1>
+      <div class="top-title"><span class="mono-cap">${all.length} · ${count('done')} готово</span><h1>Території</h1></div>
       <button type="button" class="icon-btn icon-btn-accent" data-add aria-label="Додати територію">${icon('plus')}</button>
     </header>
 

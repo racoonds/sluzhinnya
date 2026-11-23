@@ -19,7 +19,6 @@ export const state = {
   notes: [],
   territories: [],
   settings: structuredClone(DEFAULTS),
-  timer: null,                     // { running, startedAt, accMs, date }
 };
 
 const listeners = new Set();
@@ -40,14 +39,13 @@ function mergeSettings(saved) {
 }
 
 export async function load() {
-  const [entries, notes, territories, settings, timer] = await Promise.all([
-    db.all('entries'), db.all('notes'), db.all('territories'), db.getKV('settings'), db.getKV('timer'),
+  const [entries, notes, territories, settings] = await Promise.all([
+    db.all('entries'), db.all('notes'), db.all('territories'), db.getKV('settings'),
   ]);
   state.entries = entries || [];
   state.notes = notes || [];
   state.territories = territories || [];
   state.settings = mergeSettings(settings);
-  state.timer = timer;
 }
 
 export async function saveSettings(patch) {
@@ -97,19 +95,6 @@ export function minutesByDay() {
 
 export const entriesOn = (key) =>
   state.entries.filter((e) => e.date === key).sort((a, b) => a.createdAt - b.createdAt);
-
-/* ---------- timer ---------- */
-
-export async function setTimer(t) {
-  state.timer = t;
-  await db.setKV('timer', t);
-  emit();
-}
-
-export function timerMs(t = state.timer) {
-  if (!t) return 0;
-  return (t.accMs || 0) + (t.running && t.startedAt ? Date.now() - t.startedAt : 0);
-}
 
 /* ---------- notes ---------- */
 

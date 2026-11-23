@@ -36,7 +36,6 @@ const routes = {
 const TABS = [
   ['home', 'Головна', 'home'],
   ['calendar', 'Календар', 'calendar'],
-  ['add'],
   ['territories', 'Території', 'map'],
   ['notes', 'Нотатки', 'note'],
 ];
@@ -80,9 +79,9 @@ function render({ keepScroll = false } = {}) {
 }
 
 function renderTabs() {
-  mount($('#tabbar'), html`${TABS.map(([k, label, ic]) => (k === 'add'
-    ? html`<button type="button" class="tab-add" data-add-hours aria-label="Додати години">${icon('plus')}</button>`
-    : html`<a class="tab" href="#/${k}" data-tab="${k}" aria-label="${label}">${icon(ic)}</a>`))}`);
+  mount($('#tabbar'), html`
+    <div class="dock-group">${TABS.map(([k, label, ic]) => html`<a class="tab" href="#/${k}" data-tab="${k}" aria-label="${label}">${icon(ic)}</a>`)}</div>
+    <button type="button" class="tab-add" data-add-hours aria-label="Додати години">${icon('plus')}</button>`);
   $('#tabbar').addEventListener('click', (e) => {
     if (e.target.closest('[data-add-hours]')) {
       haptic(10);

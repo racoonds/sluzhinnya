@@ -1,6 +1,6 @@
 // Calendar: month heat-map, the selected day's entries, service-year overview.
 import { $, html, mount, fmtShort, fmtClock, haptic } from '../util.js';
-import { icon } from '../icons.js';
+import { icon, pixelIcon } from '../icons.js';
 import { state, minutesByDay, entriesOn } from '../store.js';
 import { serviceYearMonths, sumRange } from '../stats.js';
 import {
@@ -52,20 +52,22 @@ export function render(root, params = []) {
 
     mount(root, html`
     <header class="top">
-      <span class="label">календар</span>
+      <div class="top-title"><span class="mono-cap">${fmtClock(monthMin)} год</span><h1>Календар</h1></div>
       ${!isCurMonth || selected !== tk ? html`<button type="button" class="pill-btn" data-today>Сьогодні</button>` : ''}
     </header>
 
     <section class="card cal">
-      <div class="card-top">
-        <button type="button" class="nav-btn" data-m="-1" aria-label="Попередній місяць">${icon('left')}</button>
-        <div class="cal-title">${MONTHS[month.getMonth()]}${month.getFullYear() !== new Date().getFullYear() ? html` <span>${month.getFullYear()}</span>` : ''}</div>
-        <button type="button" class="nav-btn" data-m="1" aria-label="Наступний місяць">${icon('right')}</button>
+      <div class="card-head">
+        <span class="card-tag">${pixelIcon('day', 'px-accent')}<span class="cal-title">${MONTHS[month.getMonth()]}${month.getFullYear() !== new Date().getFullYear() ? html` <span>${month.getFullYear()}</span>` : ''}</span></span>
+        <span class="card-nav">
+          <button type="button" class="nav-btn" data-m="-1" aria-label="Попередній місяць">${icon('left')}</button>
+          <button type="button" class="nav-btn" data-m="1" aria-label="Наступний місяць">${icon('right')}</button>
+        </span>
       </div>
-      <div class="kv-row">
-        <div class="kv"><span class="label">години</span><b>${fmtClock(monthMin)}</b></div>
-        ${monthGoal ? html`<div class="kv"><span class="label">ціль</span><b>${fmtShort(monthGoal)}</b></div>` : ''}
-        <div class="kv"><span class="label">днів</span><b>${activeDays}</b></div>
+      <div class="tgrid tgrid-flat">
+        <div class="tcell"><span class="label">години</span><b>${fmtClock(monthMin)}</b></div>
+        ${monthGoal ? html`<div class="tcell"><span class="label">ціль</span><b>${fmtShort(monthGoal)}</b></div>` : ''}
+        <div class="tcell"><span class="label">днів</span><b>${activeDays}</b></div>
       </div>
       ${monthGoal ? html`<div class="meter"><span class="meter-fill" data-vars="--p:${Math.min(100, (monthMin / monthGoal) * 100).toFixed(1)}%"></span></div>` : ''}
       <div class="cal-grid" data-swipe>

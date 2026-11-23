@@ -54,12 +54,12 @@ const durMarkup = () => html`
   </div>
   <div class="chips chips-center">${QUICK.map((v) => html`<button type="button" class="chip" data-set="${v}">${fmtClock(v)}</button>`)}</div>`;
 
-export function openEntrySheet({ entry = null, date = null, minutes = null, onSaved = null } = {}) {
+export function openEntrySheet({ entry = null, date = null } = {}) {
   if (entry) return editSheet(entry);
-  return daySheet(date || todayKey(), minutes ?? 60, onSaved);
+  return daySheet(date || todayKey(), 60);
 }
 
-function daySheet(initialDate, initialMin, onSaved) {
+function daySheet(initialDate, initialMin) {
   let day = initialDate;
   const tk = todayKey();
   openSheet({
@@ -121,7 +121,6 @@ function daySheet(initialDate, initialMin, onSaved) {
         haptic(15);
         const added = await addEntry({ date: day, minutes: min, note: form.elements.note.value });
         close();
-        onSaved?.(added);
         toast(`+${fmtClock(min)} · ${dayTitle(day).toLowerCase()}`, { action: 'Скасувати', onAction: () => deleteEntry(added.id) });
       });
     },

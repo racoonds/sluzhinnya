@@ -33,8 +33,8 @@ export async function render(root) {
 
   mount(root, html`
     <header class="top top-back">
-      <a class="icon-btn ghost" href="#/home" aria-label="Назад">${icon('left')}</a>
-      <h1 class="top-h">Налаштування</h1>
+      <a class="nav-btn nav-btn-lg" href="#/home" aria-label="Назад">${icon('left')}</a>
+      <div class="top-title"><span class="mono-cap">v${APP_VERSION}</span><h1>Налаштування</h1></div>
     </header>
 
     ${st.signedIn ? html`
@@ -157,7 +157,6 @@ export async function render(root) {
         <span class="gr-main"><b>Видалити всі дані</b></span>
       </button>
     </div>
-    <p class="version">v${APP_VERSION}</p>
   `);
 
   const rerender = () => render(root);

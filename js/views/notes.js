@@ -23,7 +23,7 @@ export function renderList(root) {
 
   mount(root, html`
     <header class="top">
-      <h1 class="top-h">Нотатки <span class="num muted">${total || ''}</span></h1>
+      <div class="top-title"><span class="mono-cap">${total} збережено</span><h1>Нотатки</h1></div>
       <a class="icon-btn icon-btn-accent" href="#/note/new" aria-label="Нова нотатка">${icon('plus')}</a>
     </header>
     ${total ? html`

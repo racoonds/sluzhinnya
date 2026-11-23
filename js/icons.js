@@ -55,12 +55,27 @@ export function icon(name, cls = '') {
   return raw(`<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`);
 }
 
-/** Status glyphs for territories (circle → half → check). */
+/* Pixel glyphs: 6×6 grids. '#' = full pixel, '+' = dim pixel. */
+const PIXELS = {
+  new: ['.+##+.', '+....+', '#....#', '#....#', '+....+', '.+##+.'],
+  progress: ['.+##+.', '+.####', '#..###', '#..###', '+.####', '.+##+.'],
+  done: ['......', '.....#', '....#+', '#..#+.', '+##+..', '.+#...'],
+  goal: ['..##..', '.#++#.', '#+..+#', '#+..+#', '.#++#.', '..##..'],
+  week: ['#.#.#.', '#.#.#+', '#+#+#+', '######', '......', '+#+#+#'],
+  day: ['..#...', '..##..', '######', '..##..', '..#...', '......'],
+};
+
+export function pixelIcon(kind, cls = '') {
+  const rows = PIXELS[kind] || PIXELS.goal;
+  let out = '';
+  rows.forEach((row, y) => [...row].forEach((c, x) => {
+    if (c === '#' || c === '+') out += `<rect x="${x + 0.1}" y="${y + 0.1}" width="0.8" height="0.8" rx="0.12"${c === '+' ? ' opacity="0.4"' : ''}/>`;
+  }));
+  return raw(`<svg class="px ${cls}" viewBox="0 0 6 6" fill="currentColor" aria-hidden="true">${out}</svg>`);
+}
+
+/** Territory status as a coloured pixel glyph. */
 export function statusIcon(status) {
-  const map = {
-    new: '<circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3.2 2.7"/>',
-    progress: '<circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5a4.5 4.5 0 0 1 0 9z" fill="currentColor"/>',
-    done: '<circle cx="12" cy="12" r="8.5" fill="currentColor"/><path d="m8.5 12.2 2.4 2.4 4.7-4.8" fill="none" stroke="var(--bg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-  };
-  return raw(`<svg class="i status-i s-${status}" viewBox="0 0 24 24" aria-hidden="true">${map[status] || map.new}</svg>`);
+  const k = PIXELS[status] ? status : 'new';
+  return pixelIcon(k, `status-i s-${k}`);
 }
